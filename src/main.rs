@@ -19,6 +19,7 @@ use smoltcp::wire::Ipv4Address;
 
 use esp_backtrace as _;
 
+mod clink;
 mod nostr;
 
 const SSID: &str = env!("SSID");

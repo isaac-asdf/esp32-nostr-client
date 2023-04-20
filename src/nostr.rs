@@ -1,6 +1,6 @@
 use esp_println::println;
 use heapless::String;
-use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message, Secp256k1};
+// use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message, Secp256k1};
 use sha2::{Digest, Sha256};
 
 pub enum NoteKinds {
@@ -75,22 +75,24 @@ impl Note {
     }
 
     fn get_sig(&self, pkey: &str) -> [u8; 64] {
-        println!("Getting signature");
-        let size = Secp256k1::preallocate_size();
-        println!("Size needed: {}", size);
+        unsafe { println!("doubled from C: {}", crate::clink::double_test(8)) };
+        // println!("Getting signature");
+        // let size = Secp256k1::preallocate_size();
+        // println!("Size needed: {}", size);
 
-        // figure out if ecdsa sig is available in no_std
-        let mut buf = [AlignedType::zeroed(); 70_000];
-        let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
+        // // figure out if ecdsa sig is available in no_std
+        // let mut buf = [AlignedType::zeroed(); 70_000];
+        // let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
-        let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
-        let key_pair = KeyPair::from_seckey_str(&sig_obj, pkey).expect("priv key failed");
-        let sig = sig_obj.sign_schnorr_no_aux_rand(&message, &key_pair);
+        // let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
+        // let key_pair = KeyPair::from_seckey_str(&sig_obj, pkey).expect("priv key failed");
+        // let sig = sig_obj.sign_schnorr_no_aux_rand(&message, &key_pair);
 
-        let mut signed = [0; 64];
-        base16ct::lower::encode(sig.as_ref(), &mut signed).expect("encode error");
-        println!("Signature complete");
-        signed
+        // let mut signed = [0; 64];
+        // base16ct::lower::encode(sig.as_ref(), &mut signed).expect("encode error");
+        // println!("Signature complete");
+        // signed
+        [0; 64]
     }
 
     fn to_json(&self) -> [u8; 1200] {

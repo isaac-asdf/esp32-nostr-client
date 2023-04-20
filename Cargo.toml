@@ -15,6 +15,10 @@ opt-level = "s"
 # Explicitly disable LTO which the Xtensa codegen backend has issues
 lto = "off"
 
+
+[build-dependencies]
+cc = "1.0.79"
+
 [dependencies]
 esp-wifi = { git = "https://github.com/esp-rs/esp-wifi.git", features = ["esp32", "embedded-svc", "wifi"] }
 embedded-hal = "0.2.3"
