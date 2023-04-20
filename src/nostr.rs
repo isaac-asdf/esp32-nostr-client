@@ -1,6 +1,6 @@
 use esp_println::println;
 use heapless::String;
-use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message, Secp256k1, SecretKey};
+use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message, Secp256k1};
 use sha2::{Digest, Sha256};
 
 pub enum NoteKinds {

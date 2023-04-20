@@ -5,7 +5,6 @@ rustflags = [
   "-C", "link-arg=-Tlinkall.x",
   "-C", "link-arg=-nostartfiles",
   "-C", "link-arg=-Tesp32_rom_functions.x",
-  "-L", "libsecp256k1/libsecp256k1.a", "-l", "secp256k1",
 ]
 
 [build]
