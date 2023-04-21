@@ -41,4 +41,4 @@ esp-backtrace = { version = "0.6.0", features = ["esp32", "panic-handler", "exce
 sha2 = {verion = "0.10.6", default-features = false }
 hex-literal = "0.4.1"
 base16ct = "0.2.0"
-secp256k1 = {path = "../rust-secp256k1", default-features = false, features = ["serde", "rand", "recovery"] }
+secp256k1 = {version = "0.27.0", default-features = false, features = ["serde", "rand", "recovery", "lowmemory"] }
