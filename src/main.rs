@@ -36,14 +36,7 @@ fn main() -> ! {
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     rtc.rwdt.disable();
 
-    // Send note
     println!("Starting up");
-    let mut note = nostr::Note::new(PRIVKEY, "hello world");
-    println!("New note created");
-    // let output = note.to_signed(PRIVKEY);
-    // let to_print = unsafe { core::str::from_utf8_unchecked(&note[..1536]) };
-    // print!("{}", to_print);
-
     let (wifi, _) = peripherals.RADIO.split();
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
     let (iface, device, mut controller, sockets) =
@@ -100,7 +93,7 @@ fn main() -> ! {
     loop {
         println!("Post to Nostr relay");
         socket.work();
-        socket.open(Ipv4Address::new(192, 168, 0, 5), 7000).unwrap();
+        socket.open(Ipv4Address::new(192, 168, 0, 3), 7000).unwrap();
 
         // establish web socket connection
         socket
@@ -121,20 +114,19 @@ fn main() -> ! {
             }
 
             if current_millis() > wait_end {
-                println!("Timeout");
+                println!("Timeout 1");
                 break;
             }
         }
         println!();
-        println!("Connection");
+        println!("Connection 1");
 
-        // // Send note
-        // let mut note = nostr::Note::new("hello world");
-        // let output = &note.to_signed(PRIVKEY);
-        // let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1536]) };
-        // print!("{}", to_print);
-
-        // socket.write(&note.to_signed(PRIVKEY)).expect("write err");
+        // write note to relay
+        let mut note = nostr::Note::new(PRIVKEY, "hello world");
+        let output = note.to_relay();
+        let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1536]) };
+        print!("{}", to_print);
+        socket.write(&output).expect("write err");
 
         socket.flush().expect("flush err");
         println!();
@@ -150,7 +142,7 @@ fn main() -> ! {
             }
 
             if current_millis() > wait_end {
-                println!("Timeout");
+                println!("Timeout 2");
                 break;
             }
         }
