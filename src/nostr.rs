@@ -1,6 +1,11 @@
 use esp_println::println;
 use heapless::String;
-use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message, Secp256k1};
+use secp256k1::{
+    self,
+    ffi::types::AlignedType,
+    serde::{Serialize, Serializer},
+    KeyPair, Message, Secp256k1,
+};
 use sha2::{Digest, Sha256};
 
 pub enum NoteKinds {
@@ -17,15 +22,18 @@ pub struct Note {
 }
 
 impl Note {
-    pub fn new(content: &str) -> Self {
-        Note {
+    pub fn new(privkey: &str, content: &str) -> Self {
+        let mut note = Note {
             id: [0; 64],
             pubkey: *b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf",
             created_at: 1,
             kind: NoteKinds::ShortNote,
             content: content.into(),
             sig: [0; 64],
-        }
+        };
+        note.set_id();
+        note.set_sig(privkey);
+        note
     }
 
     fn to_hash_str(&self) -> [u8; 1536] {
@@ -67,30 +75,28 @@ impl Note {
         hash_str
     }
 
-    fn get_id(&self) -> [u8; 64] {
+    fn set_id(&mut self) {
         let results = Sha256::digest(self.to_hash_str());
-        let mut sig = [0; 64];
-        base16ct::lower::encode(&results, &mut sig).expect("encode error");
-        sig
+        let mut hashed = [0; 64];
+        base16ct::lower::encode(&results, &mut hashed).expect("encode error");
+        self.id = hashed;
     }
 
-    fn get_sig(&self, pkey: &str) -> [u8; 64] {
-        println!("Getting signature");
-        let size = Secp256k1::preallocate_size();
-        println!("Size needed: {}", size);
-
-        // figure out if ecdsa sig is available in no_std
-        let mut buf = [AlignedType::zeroed(); 70_000];
+    fn set_sig(&mut self, privkey: &str) {
+        let mut buf = [AlignedType::zeroed(); 10_000];
         let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
-        let key_pair = KeyPair::from_seckey_str(&sig_obj, pkey).expect("priv key failed");
+        let key_pair = KeyPair::from_seckey_str(&sig_obj, privkey).expect("priv key failed");
         let sig = sig_obj.sign_schnorr_no_aux_rand(&message, &key_pair);
 
-        let mut signed = [0; 64];
-        base16ct::lower::encode(sig.as_ref(), &mut signed).expect("encode error");
+        let mut signed = [0; 200];
+        let encoded = base16ct::lower::encode(&sig[..], &mut signed).expect("encode error");
+        println!("{:?}", encoded);
         println!("Signature complete");
-        signed
+
+        let mut output_sig = [0; 64];
+        self.sig = output_sig;
     }
 
     fn to_json(&self) -> [u8; 1200] {
@@ -152,10 +158,7 @@ impl Note {
         output
     }
 
-    pub fn to_signed(&mut self, pkey: &str) -> [u8; 1536] {
-        self.id = self.get_id();
-        self.sig = self.get_sig(pkey);
-
+    pub fn to_relay(&mut self) -> [u8; 1536] {
         let mut output = [0; 1536];
         let mut count = 0;
         // fill in output

@@ -19,7 +19,6 @@ use smoltcp::wire::Ipv4Address;
 
 use esp_backtrace as _;
 
-mod clink;
 mod nostr;
 
 const SSID: &str = env!("SSID");
@@ -28,12 +27,6 @@ const PRIVKEY: &str = env!("PRIVKEY");
 
 #[entry]
 fn main() -> ! {
-    // Send note
-    let mut note = nostr::Note::new("hello world");
-    let output = &note.to_signed(PRIVKEY);
-    let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1536]) };
-    print!("{}", to_print);
-
     init_logger(log::LevelFilter::Info);
 
     let peripherals = Peripherals::take();
@@ -42,6 +35,14 @@ fn main() -> ! {
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     rtc.rwdt.disable();
+
+    // Send note
+    println!("Starting up");
+    let mut note = nostr::Note::new(PRIVKEY, "hello world");
+    println!("New note created");
+    // let output = note.to_signed(PRIVKEY);
+    // let to_print = unsafe { core::str::from_utf8_unchecked(&note[..1536]) };
+    // print!("{}", to_print);
 
     let (wifi, _) = peripherals.RADIO.split();
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
@@ -127,13 +128,13 @@ fn main() -> ! {
         println!();
         println!("Connection");
 
-        // Send note
-        let mut note = nostr::Note::new("hello world");
-        let output = &note.to_signed(PRIVKEY);
-        let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1536]) };
-        print!("{}", to_print);
+        // // Send note
+        // let mut note = nostr::Note::new("hello world");
+        // let output = &note.to_signed(PRIVKEY);
+        // let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1536]) };
+        // print!("{}", to_print);
 
-        socket.write(&note.to_signed(PRIVKEY)).expect("write err");
+        // socket.write(&note.to_signed(PRIVKEY)).expect("write err");
 
         socket.flush().expect("flush err");
         println!();
