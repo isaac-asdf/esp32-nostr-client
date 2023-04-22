@@ -4,13 +4,21 @@ use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message};
 use sha2::{Digest, Sha256};
 
 pub enum NoteKinds {
-    ShortNote = 1,
+    ShortNote,
+}
+
+impl NoteKinds {
+    pub fn to_bytes(&self) -> [u8; 1] {
+        match self {
+            Self::ShortNote => *b"1",
+        }
+    }
 }
 
 pub struct Note {
     id: [u8; 64],
     pubkey: [u8; 64],
-    created_at: u8,
+    created_at: [u8; 2],
     kind: NoteKinds,
     content: String<64>,
     sig: [u8; 128],
@@ -22,7 +30,7 @@ impl Note {
         let mut note = Note {
             id: [0; 64],
             pubkey: *b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf",
-            created_at: 1,
+            created_at: *b"01",
             kind: NoteKinds::ShortNote,
             content: content.into(),
             sig: [0; 128],
@@ -49,8 +57,11 @@ impl Note {
             hash_str[count] = *bs;
             count += 1;
         });
-        hash_str[count] = self.created_at;
-        count += 1;
+        self.created_at.iter().for_each(|bs| {
+            hash_str[count] = *bs;
+            count += 1;
+        });
+
         ",".as_bytes().iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
@@ -111,9 +122,15 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        output[count] = self.created_at;
-        count += 1;
-        r#","kind": 1"#.as_bytes().iter().for_each(|bs| {
+        self.created_at.iter().for_each(|bs| {
+            output[count] = *bs;
+            count += 1;
+        });
+        r#","kind": "#.as_bytes().iter().for_each(|bs| {
+            output[count] = *bs;
+            count += 1;
+        });
+        self.kind.to_bytes().iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
