@@ -174,7 +174,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#"]\r\n\r\n"#.as_bytes().iter().for_each(|bs| {
+        r#"]"#.as_bytes().iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
