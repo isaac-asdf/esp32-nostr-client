@@ -36,6 +36,12 @@ fn main() -> ! {
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     rtc.rwdt.disable();
 
+    // write note to relay
+    let mut note = nostr::Note::new(PRIVKEY, "hello world");
+    let output = note.to_relay();
+    let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1535]) };
+    print!("{}", to_print);
+
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
@@ -124,8 +130,6 @@ fn main() -> ! {
         // write note to relay
         let mut note = nostr::Note::new(PRIVKEY, "hello world");
         let output = note.to_relay();
-        let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1536]) };
-        print!("{}", to_print);
         socket.write(&output).expect("write err");
 
         socket.flush().expect("flush err");

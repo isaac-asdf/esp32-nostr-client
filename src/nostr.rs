@@ -96,7 +96,7 @@ impl Note {
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
         let key_pair = KeyPair::from_seckey_str(&sig_obj, privkey).expect("priv key failed");
         let sig = sig_obj.sign_schnorr_no_aux_rand(&message, &key_pair);
-        base16ct::lower::encode(&sig.to_bytes(), &mut self.sig).expect("encode error");
+        base16ct::lower::encode(sig.as_ref(), &mut self.sig).expect("encode error");
     }
 
     fn to_json(&self) -> [u8; 1200] {
