@@ -36,12 +36,6 @@ fn main() -> ! {
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     rtc.rwdt.disable();
 
-    // write note to relay
-    let mut note = nostr::Note::new(PRIVKEY, "hello world");
-    let output = note.to_relay();
-    let to_print = unsafe { core::str::from_utf8_unchecked(&output[..1535]) };
-    print!("{}", to_print);
-
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
@@ -99,15 +93,14 @@ fn main() -> ! {
     loop {
         println!("Post to Nostr relay");
         socket.work();
-        socket.open(Ipv4Address::new(192, 168, 0, 3), 7000).unwrap();
+        socket.open(Ipv4Address::new(192, 168, 0, 5), 7000).unwrap();
 
         // establish web socket connection
         socket
             .write(b"GET / HTTP/1.1\r\nAccept: text/html\r\nHost: 192.168.0.5:7000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")
             .expect("write err");
-
+        println!("Message Sent");
         socket.flush().expect("flush err");
-        println!();
 
         let wait_end = current_millis() + 20 * 1000;
         loop {

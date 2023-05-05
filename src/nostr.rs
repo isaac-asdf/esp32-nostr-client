@@ -90,7 +90,7 @@ impl Note {
     }
 
     fn set_sig(&mut self, privkey: &str) {
-        let mut buf = [AlignedType::zeroed(); 10_000];
+        let mut buf = [AlignedType::zeroed(); 15_000];
         let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
