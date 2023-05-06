@@ -7,18 +7,16 @@ pub struct NetworkConnection<'a> {
     pub socket: Socket<'a, 'a>,
 }
 
-impl NetworkConnection<'_> {
-    pub fn new(socket: Socket) -> Self {
-        NetworkConnection { socket: socket }
-    }
-
-    pub fn connect(&mut self, address: Ipv4Address, port: u16) -> Result<(), IoError> {
-        self.socket.open(address, port)
+impl<'a> NetworkConnection<'a> {
+    pub fn new(
+        mut socket: Socket<'a, 'a>,
+        address: Ipv4Address,
+        port: u16,
+    ) -> Result<Self, IoError> {
+        socket.open(address, port)?;
+        Ok(NetworkConnection { socket })
     }
 }
-
-#[derive(Debug)]
-pub struct NetworkErr;
 
 impl Stream<IoError> for NetworkConnection<'_> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {

@@ -100,7 +100,7 @@ fn main() -> ! {
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
-        path: "/chat",
+        path: "/",
         host: "192.168.0.5",
         origin: "http://192.168.5.0:7000",
         sub_protocols: None,
@@ -119,8 +119,8 @@ fn main() -> ! {
     );
 
     // set up connection
-    let mut stream = network::NetworkConnection::new(socket);
-    stream.connect(Ipv4Address::new(192, 168, 0, 5), 7000);
+    let mut stream =
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 5), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
