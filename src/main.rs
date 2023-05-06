@@ -3,8 +3,10 @@
 use embedded_svc::ipv4::Interface;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 
-use embedded_websocket::framer::Framer;
-use embedded_websocket::{EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType};
+use embedded_websocket::framer::{Framer, ReadResult};
+use embedded_websocket::{
+    EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType,
+};
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::Rng;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
@@ -125,7 +127,9 @@ fn main() -> ! {
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
 
+    println!("connected");
     let mut note = nostr::Note::new(PRIVKEY, "hellow world");
+    println!("note created");
     framer
         .write(
             &mut stream,
@@ -134,5 +138,18 @@ fn main() -> ! {
             &note.to_relay(),
         )
         .expect("framer write fail");
+    println!("written?");
+
+    while let ReadResult::Text(s) = framer.read(&mut stream, &mut frame_buf).unwrap() {
+        println!("Received: {}", s);
+
+        // close the websocket after receiving the first reply
+        framer
+            .close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None)
+            .unwrap();
+        println!("Sent close handshake");
+    }
+
+    println!("Connection closed");
     loop {}
 }

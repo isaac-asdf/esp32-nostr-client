@@ -89,8 +89,9 @@ impl Note {
         base16ct::lower::encode(&results, &mut self.id).expect("encode error");
     }
 
+    // todo: return signing error
     fn set_sig(&mut self, privkey: &str) {
-        let mut buf = [AlignedType::zeroed(); 15_000];
+        let mut buf = [AlignedType::zeroed(); 12_000];
         let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
