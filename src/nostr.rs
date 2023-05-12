@@ -25,7 +25,7 @@ pub struct Note {
 }
 
 impl Note {
-    pub fn new(privkey: &str, content: &str) -> Self {
+    pub fn new(privkey: &str, content: &str, mut hasher: Sha) -> Self {
         println!("starting new note");
         let mut note = Note {
             id: [0; 64],
@@ -45,7 +45,7 @@ impl Note {
     fn to_hash_str(&self) -> [u8; 1536] {
         let mut hash_str = [0; 1536];
         let mut count = 0;
-        "[0,".as_bytes().iter().for_each(|bs| {
+        b"[0,".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
@@ -53,7 +53,7 @@ impl Note {
             hash_str[count] = *bs;
             count += 1;
         });
-        ",".as_bytes().iter().for_each(|bs| {
+        b",".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
@@ -61,19 +61,21 @@ impl Note {
             hash_str[count] = *bs;
             count += 1;
         });
-
-        ",".as_bytes().iter().for_each(|bs| {
+        b",".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
-        hash_str[count] = 4;
-        count += 1;
-        ",".as_bytes().iter().for_each(|bs| {
+        b"4".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
         count += 1;
-        "[],".as_bytes().iter().for_each(|bs| {
+        b",".iter().for_each(|bs| {
+            hash_str[count] = *bs;
+            count += 1;
+        });
+        count += 1;
+        b"[],".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
@@ -91,7 +93,8 @@ impl Note {
 
     // todo: return signing error
     fn set_sig(&mut self, privkey: &str) {
-        let mut buf = [AlignedType::zeroed(); 12_000];
+        // figure out what size we need and why
+        let mut buf = [AlignedType::zeroed(); 10_000];
         let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
@@ -103,7 +106,7 @@ impl Note {
     fn to_json(&self) -> [u8; 1200] {
         let mut output = [0; 1200];
         let mut count = 0;
-        r#"{"id": "#.as_bytes().iter().for_each(|bs| {
+        br#"{"id": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -111,7 +114,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#","pubkey": "#.as_bytes().iter().for_each(|bs| {
+        br#","pubkey": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -119,7 +122,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#","created_at": "#.as_bytes().iter().for_each(|bs| {
+        br#","created_at": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -127,7 +130,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#","kind": "#.as_bytes().iter().for_each(|bs| {
+        br#","kind": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -135,11 +138,11 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#","tags": []"#.as_bytes().iter().for_each(|bs| {
+        br#","tags": []"#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
-        r#","content": ""#.as_bytes().iter().for_each(|bs| {
+        br#","content": ""#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -147,7 +150,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#"","sig": "#.as_bytes().iter().for_each(|bs| {
+        br#"","sig": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -155,7 +158,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#"}"#.as_bytes().iter().for_each(|bs| {
+        br#"}"#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
