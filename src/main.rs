@@ -11,6 +11,7 @@ use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::Rng;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
 
+use esp_hal_common::sha::{Sha, ShaMode};
 use esp_println::logger::init_logger;
 use esp_println::println;
 use esp_wifi::current_millis;
@@ -49,6 +50,12 @@ fn main() -> ! {
     let (iface, device, mut controller, sockets) =
         create_network_interface(wifi, WifiMode::Sta, &mut socket_set_entries);
     let wifi_stack = WifiStack::new(iface, device, sockets, current_millis);
+
+    // create a note
+    let sha = peripherals.SHA;
+    let mut hasher = Sha::new(sha, ShaMode::SHA256);
+    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    println!("note created");
 
     use esp32_hal::timer::TimerGroup;
     let timer = TimerGroup::new(peripherals.TIMG1, &clocks).timer0;
@@ -128,8 +135,6 @@ fn main() -> ! {
         .expect("connection error");
 
     println!("connected");
-    let mut note = nostr::Note::new(PRIVKEY, "hellow world");
-    println!("note created");
     framer
         .write(
             &mut stream,

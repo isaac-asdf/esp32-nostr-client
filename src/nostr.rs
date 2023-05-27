@@ -1,7 +1,7 @@
+use esp_hal_common::{prelude::nb::block, sha::Sha};
 use esp_println::println;
 use heapless::String;
 use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message};
-use sha2::{Digest, Sha256};
 
 pub enum NoteKinds {
     ShortNote,
@@ -35,7 +35,7 @@ impl Note {
             content: content.into(),
             sig: [0; 128],
         };
-        note.set_id();
+        note.set_id(hasher);
         println!("getting sig");
         note.set_sig(privkey);
         println!("sig complete");
@@ -86,8 +86,16 @@ impl Note {
         hash_str
     }
 
-    fn set_id(&mut self) {
-        let results = Sha256::digest(self.to_hash_str());
+    fn set_id(&mut self, mut hasher: Sha) {
+        let remaining = self.to_hash_str();
+        let mut remaining = remaining.as_ref();
+        while remaining.len() > 0 {
+            remaining = block!(hasher.update(remaining)).unwrap();
+        }
+        // Finish can be called as many times as desired to get mutliple copies of the
+        // output.
+        let mut results = [0; 32];
+        block!(hasher.finish(results.as_mut_slice())).unwrap();
         base16ct::lower::encode(&results, &mut self.id).expect("encode error");
     }
 
