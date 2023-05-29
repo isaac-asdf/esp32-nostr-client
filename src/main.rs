@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 use embedded_svc::ipv4::Interface;
-use embedded_svc::wifi::{AccessPointInfo, ClientConfiguration, Configuration, Wifi};
+use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 use embedded_websocket::framer::{Framer, ReadResult};
 use embedded_websocket::{
     EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType,
@@ -67,8 +67,6 @@ fn main() -> ! {
     let wifi_stack = WifiStack::new(iface, device, sockets, current_millis);
 
     // create a note
-    let sha = peripherals.SHA;
-    let mut hasher = Sha::new(sha, ShaMode::SHA256, &mut system.peripheral_clock_control);
     let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
     println!("note created");
 

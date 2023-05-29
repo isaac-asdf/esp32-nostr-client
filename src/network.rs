@@ -13,7 +13,7 @@ impl<'a> NetworkConnection<'a> {
         address: Ipv4Address,
         port: u16,
     ) -> Result<Self, IoError> {
-        socket.open(address, port)?;
+        socket.open(smoltcp::wire::IpAddress::Ipv4(address), port)?;
         Ok(NetworkConnection { socket })
     }
 }

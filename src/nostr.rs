@@ -1,5 +1,4 @@
 use esp_hal_common::{prelude::nb::block, sha::Sha};
-use esp_println::println;
 use heapless::String;
 use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message};
 
