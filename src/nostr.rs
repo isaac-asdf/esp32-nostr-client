@@ -26,7 +26,6 @@ pub struct Note {
 
 impl Note {
     pub fn new(privkey: &str, content: &str, mut hasher: Sha) -> Self {
-        println!("starting new note");
         let mut note = Note {
             id: [0; 64],
             pubkey: *b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf",
@@ -36,9 +35,7 @@ impl Note {
             sig: [0; 128],
         };
         note.set_id(hasher);
-        println!("getting sig");
         note.set_sig(privkey);
-        println!("sig complete");
         note
     }
 

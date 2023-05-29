@@ -1,8 +1,7 @@
 #![no_std]
 #![no_main]
 use embedded_svc::ipv4::Interface;
-use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
-
+use embedded_svc::wifi::{AccessPointInfo, ClientConfiguration, Configuration, Wifi};
 use embedded_websocket::framer::{Framer, ReadResult};
 use embedded_websocket::{
     EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType,
@@ -12,6 +11,7 @@ use esp32_hal::Rng;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
 
 use esp_hal_common::sha::{Sha, ShaMode};
+use esp_hal_common::timer::TimerGroup;
 use esp_println::logger::init_logger;
 use esp_println::println;
 use esp_wifi::current_millis;
@@ -36,13 +36,28 @@ const PRIVKEY: &str = env!("PRIVKEY");
 #[entry]
 fn main() -> ! {
     init_logger(log::LevelFilter::Info);
-
     let peripherals = Peripherals::take();
-
-    let system = peripherals.DPORT.split();
+    let mut system = peripherals.DPORT.split();
+    // let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
+
+    let timer_group0 = TimerGroup::new(
+        peripherals.TIMG0,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
+    let mut wdt = timer_group0.wdt;
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+
+    // Disable MWDT and RWDT (Watchdog) flash boot protection
+    wdt.disable();
     rtc.rwdt.disable();
+
+    let mut hasher = Sha::new(
+        peripherals.SHA,
+        ShaMode::SHA512,
+        &mut system.peripheral_clock_control,
+    );
 
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
@@ -53,12 +68,16 @@ fn main() -> ! {
 
     // create a note
     let sha = peripherals.SHA;
-    let mut hasher = Sha::new(sha, ShaMode::SHA256);
+    let mut hasher = Sha::new(sha, ShaMode::SHA256, &mut system.peripheral_clock_control);
     let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
     println!("note created");
 
-    use esp32_hal::timer::TimerGroup;
-    let timer = TimerGroup::new(peripherals.TIMG1, &clocks).timer0;
+    let timer = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    )
+    .timer0;
     esp_wifi::initialize(
         timer,
         Rng::new(peripherals.RNG),
@@ -72,7 +91,8 @@ fn main() -> ! {
         password: PASSWORD.into(),
         ..Default::default()
     });
-    let _res = controller.set_configuration(&client_config);
+    let res = controller.set_configuration(&client_config);
+    println!("wifi_set_configuration returned {:?}", res);
     controller.start().unwrap();
     println!("wifi_connect {:?}", controller.connect());
 
