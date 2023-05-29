@@ -66,10 +66,7 @@ fn main() -> ! {
         create_network_interface(wifi, WifiMode::Sta, &mut socket_set_entries);
     let wifi_stack = WifiStack::new(iface, device, sockets, current_millis);
 
-    // create a note
-    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
-    println!("note created");
-
+    // Iniitalize wifi
     let timer = TimerGroup::new(
         peripherals.TIMG1,
         &clocks,
@@ -83,7 +80,6 @@ fn main() -> ! {
         &clocks,
     )
     .unwrap();
-
     let client_config = Configuration::Client(ClientConfiguration {
         ssid: SSID.into(),
         password: PASSWORD.into(),
@@ -93,6 +89,10 @@ fn main() -> ! {
     println!("wifi_set_configuration returned {:?}", res);
     controller.start().unwrap();
     println!("wifi_connect {:?}", controller.connect());
+
+    // create a note
+    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    println!("note created");
 
     loop {
         let res = controller.is_connected();
