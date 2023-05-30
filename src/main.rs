@@ -35,10 +35,9 @@ const PRIVKEY: &str = env!("PRIVKEY");
 
 #[entry]
 fn main() -> ! {
-    init_logger(log::LevelFilter::Info);
+    init_logger(log::LevelFilter::Debug);
     let peripherals = Peripherals::take();
     let mut system = peripherals.DPORT.split();
-    // let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
 
     let timer_group0 = TimerGroup::new(
@@ -59,6 +58,10 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
     );
 
+    // create a note
+    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    println!("note created");
+
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
@@ -73,6 +76,7 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
     )
     .timer0;
+    esp_wifi::wifi_set_log_verbose();
     esp_wifi::initialize(
         timer,
         Rng::new(peripherals.RNG),
@@ -89,10 +93,6 @@ fn main() -> ! {
     println!("wifi_set_configuration returned {:?}", res);
     controller.start().unwrap();
     println!("wifi_connect {:?}", controller.connect());
-
-    // create a note
-    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
-    println!("note created");
 
     loop {
         let res = controller.is_connected();
