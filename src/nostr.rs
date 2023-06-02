@@ -1,37 +1,47 @@
-use esp_println::println;
+use esp_hal_common::{prelude::nb::block, sha::Sha};
 use heapless::String;
-use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message, Secp256k1, SecretKey};
-use sha2::{Digest, Sha256};
+use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message};
 
 pub enum NoteKinds {
-    ShortNote = 1,
+    ShortNote,
+}
+
+impl NoteKinds {
+    pub fn to_bytes(&self) -> [u8; 1] {
+        match self {
+            Self::ShortNote => *b"1",
+        }
+    }
 }
 
 pub struct Note {
     id: [u8; 64],
     pubkey: [u8; 64],
-    created_at: u8,
+    created_at: [u8; 2],
     kind: NoteKinds,
     content: String<64>,
-    sig: [u8; 64],
+    sig: [u8; 128],
 }
 
 impl Note {
-    pub fn new(content: &str) -> Self {
-        Note {
+    pub fn new(privkey: &str, content: &str, mut hasher: Sha) -> Self {
+        let mut note = Note {
             id: [0; 64],
             pubkey: *b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf",
-            created_at: 1,
+            created_at: *b"01",
             kind: NoteKinds::ShortNote,
             content: content.into(),
-            sig: [0; 64],
-        }
+            sig: [0; 128],
+        };
+        note.set_id(hasher);
+        note.set_sig(privkey);
+        note
     }
 
     fn to_hash_str(&self) -> [u8; 1536] {
         let mut hash_str = [0; 1536];
         let mut count = 0;
-        "[0,".as_bytes().iter().for_each(|bs| {
+        b"[0,".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
@@ -39,24 +49,29 @@ impl Note {
             hash_str[count] = *bs;
             count += 1;
         });
-        ",".as_bytes().iter().for_each(|bs| {
+        b",".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
-        hash_str[count] = self.created_at;
-        count += 1;
-        ",".as_bytes().iter().for_each(|bs| {
+        self.created_at.iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
-        hash_str[count] = 4;
-        count += 1;
-        ",".as_bytes().iter().for_each(|bs| {
+        b",".iter().for_each(|bs| {
+            hash_str[count] = *bs;
+            count += 1;
+        });
+        b"4".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
         count += 1;
-        "[],".as_bytes().iter().for_each(|bs| {
+        b",".iter().for_each(|bs| {
+            hash_str[count] = *bs;
+            count += 1;
+        });
+        count += 1;
+        b"[],".iter().for_each(|bs| {
             hash_str[count] = *bs;
             count += 1;
         });
@@ -67,46 +82,43 @@ impl Note {
         hash_str
     }
 
-    fn get_id(&self) -> [u8; 64] {
-        let results = Sha256::digest(self.to_hash_str());
-        let mut sig = [0; 64];
-        base16ct::lower::encode(&results, &mut sig).expect("encode error");
-        sig
+    fn set_id(&mut self, mut hasher: Sha) {
+        let remaining = self.to_hash_str();
+        let mut remaining = remaining.as_ref();
+        while remaining.len() > 0 {
+            remaining = block!(hasher.update(remaining)).unwrap();
+        }
+        // Finish can be called as many times as desired to get mutliple copies of the
+        // output.
+        let mut results = [0; 32];
+        block!(hasher.finish(results.as_mut_slice())).unwrap();
+        base16ct::lower::encode(&results, &mut self.id).expect("encode error");
     }
 
-    fn get_sig(&self, pkey: &str) -> [u8; 64] {
-        println!("Getting signature");
-        let size = Secp256k1::preallocate_size();
-        println!("Size needed: {}", size);
-
-        // figure out if ecdsa sig is available in no_std
-        let mut buf = [AlignedType::zeroed(); 70_000];
+    // todo: return signing error
+    fn set_sig(&mut self, privkey: &str) {
+        // figure out what size we need and why
+        let mut buf = [AlignedType::zeroed(); 500];
         let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
-        let key_pair = KeyPair::from_seckey_str(&sig_obj, pkey).expect("priv key failed");
+        let key_pair = KeyPair::from_seckey_str(&sig_obj, privkey).expect("priv key failed");
         let sig = sig_obj.sign_schnorr_no_aux_rand(&message, &key_pair);
-
-        let mut signed = [0; 64];
-        base16ct::lower::encode(sig.as_ref(), &mut signed).expect("encode error");
-        println!("Signature complete");
-        signed
+        base16ct::lower::encode(sig.as_ref(), &mut self.sig).expect("encode error");
     }
 
     fn to_json(&self) -> [u8; 1200] {
         let mut output = [0; 1200];
         let mut count = 0;
-        r#"{"id": "#.as_bytes().iter().for_each(|bs| {
+        br#"{"id": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
-        println!("id: {:?}", self.id);
-        println!("pubkey: {:?}", self.pubkey);
         self.id.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
-        r#","pubkey": "#.as_bytes().iter().for_each(|bs| {
+        br#","pubkey": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -114,21 +126,27 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#","created_at": "#.as_bytes().iter().for_each(|bs| {
+        br#","created_at": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
-        output[count] = self.created_at;
-        count += 1;
-        r#","kind": 1"#.as_bytes().iter().for_each(|bs| {
+        self.created_at.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
-        r#","tags": []"#.as_bytes().iter().for_each(|bs| {
+        br#","kind": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
-        r#","content": ""#.as_bytes().iter().for_each(|bs| {
+        self.kind.to_bytes().iter().for_each(|bs| {
+            output[count] = *bs;
+            count += 1;
+        });
+        br#","tags": []"#.iter().for_each(|bs| {
+            output[count] = *bs;
+            count += 1;
+        });
+        br#","content": ""#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -136,7 +154,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#"","sig": "#.as_bytes().iter().for_each(|bs| {
+        br#"","sig": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -144,7 +162,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        r#"}"#.as_bytes().iter().for_each(|bs| {
+        br#"}"#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -152,11 +170,8 @@ impl Note {
         output
     }
 
-    pub fn to_signed(&mut self, pkey: &str) -> [u8; 1536] {
-        self.id = self.get_id();
-        self.sig = self.get_sig(pkey);
-
-        let mut output = [0; 1536];
+    pub fn to_relay(&mut self) -> [u8; 1535] {
+        let mut output = [0; 1535];
         let mut count = 0;
         // fill in output
         r#"["EVENT", "#.as_bytes().iter().for_each(|bs| {
