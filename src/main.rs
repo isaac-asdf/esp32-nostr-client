@@ -35,32 +35,33 @@ const PRIVKEY: &str = env!("PRIVKEY");
 
 #[entry]
 fn main() -> ! {
-    init_logger(log::LevelFilter::Debug);
+    init_logger(log::LevelFilter::Info);
     let peripherals = Peripherals::take();
     let mut system = peripherals.DPORT.split();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
 
+    // Disable MWDT and RWDT (Watchdog) flash boot protection
+    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     let timer_group0 = TimerGroup::new(
         peripherals.TIMG0,
         &clocks,
         &mut system.peripheral_clock_control,
     );
-    let mut wdt = timer_group0.wdt;
-    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
-
-    // Disable MWDT and RWDT (Watchdog) flash boot protection
-    wdt.disable();
+    let mut wdt0 = timer_group0.wdt;
+    let timer = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    )
+    .timer0;
     rtc.rwdt.disable();
+    wdt0.disable();
 
     let mut hasher = Sha::new(
         peripherals.SHA,
         ShaMode::SHA512,
         &mut system.peripheral_clock_control,
     );
-
-    // create a note
-    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
-    println!("note created");
 
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
@@ -70,13 +71,6 @@ fn main() -> ! {
     let wifi_stack = WifiStack::new(iface, device, sockets, current_millis);
 
     // Iniitalize wifi
-    let timer = TimerGroup::new(
-        peripherals.TIMG1,
-        &clocks,
-        &mut system.peripheral_clock_control,
-    )
-    .timer0;
-    esp_wifi::wifi_set_log_verbose();
     esp_wifi::initialize(
         timer,
         Rng::new(peripherals.RNG),
@@ -153,15 +147,15 @@ fn main() -> ! {
         .expect("connection error");
 
     println!("connected");
+
+    // create a note
+    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    let msg = note.to_relay();
+    let to_print = unsafe { core::str::from_utf8_unchecked(&msg[..1535]) };
+    println!("Note: {}", to_print);
     framer
-        .write(
-            &mut stream,
-            WebSocketSendMessageType::Text,
-            true,
-            &note.to_relay(),
-        )
+        .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
         .expect("framer write fail");
-    println!("written?");
 
     while let ReadResult::Text(s) = framer.read(&mut stream, &mut frame_buf).unwrap() {
         println!("Received: {}", s);

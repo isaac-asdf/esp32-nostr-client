@@ -98,7 +98,7 @@ impl Note {
     // todo: return signing error
     fn set_sig(&mut self, privkey: &str) {
         // figure out what size we need and why
-        let mut buf = [AlignedType::zeroed(); 10_000];
+        let mut buf = [AlignedType::zeroed(); 500];
         let sig_obj = secp256k1::Secp256k1::preallocated_new(&mut buf).unwrap();
 
         let message = Message::from_slice(&self.id[0..32]).expect("32 bytes");
