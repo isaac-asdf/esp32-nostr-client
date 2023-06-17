@@ -17,7 +17,7 @@ impl NoteKinds {
 pub struct Note {
     id: [u8; 64],
     pubkey: [u8; 64],
-    created_at: [u8; 2],
+    created_at: [u8; 10],
     kind: NoteKinds,
     content: String<64>,
     sig: [u8; 128],
@@ -28,7 +28,7 @@ impl Note {
         let mut note = Note {
             id: [0; 64],
             pubkey: *b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf",
-            created_at: *b"01",
+            created_at: *b"1686880020",
             kind: NoteKinds::ShortNote,
             content: content.into(),
             sig: [0; 128],
@@ -110,7 +110,7 @@ impl Note {
     fn to_json(&self) -> [u8; 1200] {
         let mut output = [0; 1200];
         let mut count = 0;
-        br#"{"id": "#.iter().for_each(|bs| {
+        br#"{"id": ""#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -118,7 +118,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        br#","pubkey": "#.iter().for_each(|bs| {
+        br#"","pubkey": ""#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -126,7 +126,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        br#","created_at": "#.iter().for_each(|bs| {
+        br#"","created_at": "#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -154,7 +154,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        br#"","sig": "#.iter().for_each(|bs| {
+        br#"","sig": ""#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });
@@ -162,7 +162,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        br#"}"#.iter().for_each(|bs| {
+        br#""}"#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });

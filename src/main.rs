@@ -4,7 +4,8 @@ use embedded_svc::ipv4::Interface;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 use embedded_websocket::framer::{Framer, ReadResult};
 use embedded_websocket::{
-    EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType,
+    EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions,
+    WebSocketSendMessageType, WebSocketState,
 };
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::Rng;
@@ -122,8 +123,8 @@ fn main() -> ! {
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "192.168.0.5",
-        origin: "http://192.168.5.0:7000",
+        host: "192.168.0.4:7000",
+        origin: "",
         sub_protocols: None,
         additional_headers: None,
     };
@@ -141,30 +142,35 @@ fn main() -> ! {
 
     // set up connection
     let mut stream =
-        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 5), 7000).unwrap();
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 4), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
 
-    println!("connected");
+    let state = framer.state();
+    println!("state: {:?}", state);
 
     // create a note
     let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
     let msg = note.to_relay();
-    let to_print = unsafe { core::str::from_utf8_unchecked(&msg[..1535]) };
-    println!("Note: {}", to_print);
     framer
         .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
         .expect("framer write fail");
 
-    while let ReadResult::Text(s) = framer.read(&mut stream, &mut frame_buf).unwrap() {
-        println!("Received: {}", s);
-
-        // close the websocket after receiving the first reply
-        framer
-            .close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None)
-            .unwrap();
-        println!("Sent close handshake");
+    while framer.state() == WebSocketState::Open {
+        match framer.read(&mut stream, &mut frame_buf) {
+            Ok(s) => {
+                // framer
+                //     .close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None)
+                //     .map_err(|e| {
+                //         println!("{:?}", e);
+                //     });
+                // println!("Sent close handshake");
+            }
+            Err(e) => {
+                println!("{:?}", e);
+            }
+        }
     }
 
     println!("Connection closed");

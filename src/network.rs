@@ -1,5 +1,6 @@
 use embedded_io::blocking::{Read, Write};
 use embedded_websocket::framer::Stream;
+use esp_println::println;
 use esp_wifi::wifi_interface::{IoError, Socket};
 use smoltcp::wire::Ipv4Address;
 
@@ -20,9 +21,25 @@ impl<'a> NetworkConnection<'a> {
 
 impl Stream<IoError> for NetworkConnection<'_> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
-        self.socket.read(buf)
+        let len = self.socket.read(buf)?;
+        let to_print = unsafe { core::str::from_utf8_unchecked(&buf[..len]) };
+        if to_print.len() > 0 {
+            println!("Read: {}", to_print);
+            println!("Read0: {:?}", buf[0]);
+            println!("Read1: {:?}", buf[1]);
+            println!("Read2: {:?}", buf[2]);
+        }
+        self.socket.flush()?;
+        Ok(len)
     }
     fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError> {
-        self.socket.write_all(buf)
+        let to_print = unsafe { core::str::from_utf8_unchecked(&buf[..buf.len() - 1]) };
+        println!("Write: {}", to_print);
+        println!("write0: {:?}", buf[0]);
+        println!("write1: {:?}", buf[1]);
+        println!("write2: {:?}", buf[2]);
+        self.socket.write_all(buf)?;
+        self.socket.flush()?;
+        Ok(())
     }
 }
