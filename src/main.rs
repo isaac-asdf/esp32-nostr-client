@@ -2,10 +2,9 @@
 #![no_main]
 use embedded_svc::ipv4::Interface;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
-use embedded_websocket::framer::{Framer, ReadResult};
+use embedded_websocket::framer::Framer;
 use embedded_websocket::{
-    EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions,
-    WebSocketSendMessageType, WebSocketState,
+    EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType, WebSocketState,
 };
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::Rng;
@@ -60,7 +59,7 @@ fn main() -> ! {
 
     let mut hasher = Sha::new(
         peripherals.SHA,
-        ShaMode::SHA512,
+        ShaMode::SHA256,
         &mut system.peripheral_clock_control,
     );
 
@@ -151,7 +150,9 @@ fn main() -> ! {
     println!("state: {:?}", state);
 
     // create a note
-    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    let msg = br#"["EVENT",{"content":"hello","created_at":1687035119,"id":"7648eb0b7aa54e7fc6673fd8c02f818ad135bd9d0fd346a2cd27c3adc885117c","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"898374a5a18087e304efc07c454d8ef50afa9bfb1514ad5507d59ab76e5c1ed8e7a0ecef888057e05724ccb8d718ca81b409dd6ce6cdbeda9c54e8eb07aab4e3","tags":[]}] "#;
+    let msg = br#"["EVENT",{"content":"esptest","created_at":1686880020,"id":"b515da91ac5df638fae0a6e658e03acc1dda6152dd2107d02d5702ccfcf927e8","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"96ac627b6ae425cc679019ab605a378b6cfa071a175a2b1a44132feffcaeda3ee6e5b7bb4731f820566e661ede25660be3eb010734d32e19641b404924ff15d0","tags":[]}] "#;
+    let note = nostr::Note::new(PRIVKEY, "esptest", hasher);
     let msg = note.to_relay();
     framer
         .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)

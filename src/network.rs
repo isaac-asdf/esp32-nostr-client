@@ -25,9 +25,6 @@ impl Stream<IoError> for NetworkConnection<'_> {
         let to_print = unsafe { core::str::from_utf8_unchecked(&buf[..len]) };
         if to_print.len() > 0 {
             println!("Read: {}", to_print);
-            println!("Read0: {:?}", buf[0]);
-            println!("Read1: {:?}", buf[1]);
-            println!("Read2: {:?}", buf[2]);
         }
         self.socket.flush()?;
         Ok(len)
@@ -38,6 +35,7 @@ impl Stream<IoError> for NetworkConnection<'_> {
         println!("write0: {:?}", buf[0]);
         println!("write1: {:?}", buf[1]);
         println!("write2: {:?}", buf[2]);
+        println!("write3: {:?}", buf[3]);
         self.socket.write_all(buf)?;
         self.socket.flush()?;
         Ok(())
