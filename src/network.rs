@@ -30,7 +30,8 @@ impl Stream<IoError> for NetworkConnection<'_> {
         Ok(len)
     }
     fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError> {
-        let to_print = unsafe { core::str::from_utf8_unchecked(&buf[..buf.len() - 1]) };
+        let to_print = unsafe { core::str::from_utf8_unchecked(&buf[..buf.len()]) };
+        println!("buff len: {}", buf.len());
         println!("Write: {}", to_print);
         println!("write0: {:?}", buf[0]);
         println!("write1: {:?}", buf[1]);

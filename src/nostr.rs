@@ -1,7 +1,7 @@
-use esp_hal_common::{prelude::nb::block, sha::Sha};
 use esp_println::println;
 use heapless::String;
 use secp256k1::{self, ffi::types::AlignedType, KeyPair, Message};
+use sha2::{Digest, Sha256};
 
 pub enum NoteKinds {
     ShortNote,
@@ -25,7 +25,7 @@ pub struct Note {
 }
 
 impl Note {
-    pub fn new(privkey: &str, content: &str, mut hasher: Sha) -> Self {
+    pub fn new(privkey: &str, content: &str) -> Self {
         let mut note = Note {
             id: [0; 64],
             pubkey: *b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf",
@@ -34,7 +34,7 @@ impl Note {
             content: content.into(),
             sig: [0; 128],
         };
-        note.set_id(hasher);
+        note.set_id();
         note.set_sig(privkey);
         note
     }
@@ -87,18 +87,15 @@ impl Note {
         hash_str
     }
 
-    fn set_id(&mut self, mut hasher: Sha) {
+    fn set_id(&mut self) {
         let remaining = self.to_hash_str();
         let to_print = unsafe { core::str::from_utf8_unchecked(&remaining[..remaining.len() - 1]) };
         println!("{to_print}");
-        let mut remaining = remaining.as_ref();
-        while remaining.len() > 0 {
-            remaining = block!(hasher.update(remaining)).unwrap();
-        }
         // Finish can be called as many times as desired to get mutliple copies of the
         // output.
-        let mut results = [0; 32];
-        block!(hasher.finish(results.as_mut_slice())).unwrap();
+        let mut hasher = Sha256::new();
+        hasher.update(to_print);
+        let results = hasher.finalize();
         base16ct::lower::encode(&results, &mut self.id).expect("encode error");
     }
 
@@ -185,7 +182,7 @@ impl Note {
             output[count] = *bs;
             count += 1;
         });
-        br#"] "#.iter().for_each(|bs| {
+        br#"]"#.iter().for_each(|bs| {
             output[count] = *bs;
             count += 1;
         });

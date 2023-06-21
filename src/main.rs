@@ -10,7 +10,6 @@ use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::Rng;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
 
-use esp_hal_common::sha::{Sha, ShaMode};
 use esp_hal_common::timer::TimerGroup;
 use esp_println::logger::init_logger;
 use esp_println::println;
@@ -56,12 +55,6 @@ fn main() -> ! {
     .timer0;
     rtc.rwdt.disable();
     wdt0.disable();
-
-    let mut hasher = Sha::new(
-        peripherals.SHA,
-        ShaMode::SHA256,
-        &mut system.peripheral_clock_control,
-    );
 
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
@@ -150,10 +143,16 @@ fn main() -> ! {
     println!("state: {:?}", state);
 
     // create a note
-    let msg = br#"["EVENT",{"content":"hello","created_at":1687035119,"id":"7648eb0b7aa54e7fc6673fd8c02f818ad135bd9d0fd346a2cd27c3adc885117c","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"898374a5a18087e304efc07c454d8ef50afa9bfb1514ad5507d59ab76e5c1ed8e7a0ecef888057e05724ccb8d718ca81b409dd6ce6cdbeda9c54e8eb07aab4e3","tags":[]}] "#;
-    let msg = br#"["EVENT",{"content":"esptest","created_at":1686880020,"id":"b515da91ac5df638fae0a6e658e03acc1dda6152dd2107d02d5702ccfcf927e8","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"96ac627b6ae425cc679019ab605a378b6cfa071a175a2b1a44132feffcaeda3ee6e5b7bb4731f820566e661ede25660be3eb010734d32e19641b404924ff15d0","tags":[]}] "#;
-    let note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    let msg = br#"["EVENT",{"content":"hello","created_at":1687035119,"id":"7648eb0b7aa54e7fc6673fd8c02f818ad135bd9d0fd346a2cd27c3adc885117c","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"898374a5a18087e304efc07c454d8ef50afa9bfb1514ad5507d59ab76e5c1ed8e7a0ecef888057e05724ccb8d718ca81b409dd6ce6cdbeda9c54e8eb07aab4e3","tags":[]}]"#;
+    let msg1 = br#"["EVENT",{"content":"esptest","created_at":1686880020,"id":"1a892186182fc21b33dab71c62b9aeab2df926b905db7e10e671b65d78e6a019","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"eca27038afc8b1946acfcb3ace9ef4885b15b008507c0e84ea782b3dc222b8f9f1ebfd10c67a57d750315afaef8a77e93cc00836e29d6f662482fb43a93c14b4","tags":[]}]"#;
+    let note = nostr::Note::new(PRIVKEY, "esptest");
     let msg = note.to_relay();
+    let msg = msg[0..360].as_ref();
+    for i in 0..359 {
+        if msg[i] != msg1[i] {
+            println!("{} {} {}", i, msg[i], msg1[i]);
+        }
+    }
     framer
         .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
         .expect("framer write fail");
