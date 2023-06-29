@@ -2,15 +2,14 @@
 #![no_main]
 use embedded_svc::ipv4::Interface;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
-use embedded_websocket::framer::{Framer, ReadResult};
+use embedded_websocket::framer::Framer;
 use embedded_websocket::{
-    EmptyRng, WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType,
+    EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType, WebSocketState,
 };
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::Rng;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
 
-use esp_hal_common::sha::{Sha, ShaMode};
 use esp_hal_common::timer::TimerGroup;
 use esp_println::logger::init_logger;
 use esp_println::println;
@@ -56,12 +55,6 @@ fn main() -> ! {
     .timer0;
     rtc.rwdt.disable();
     wdt0.disable();
-
-    let mut hasher = Sha::new(
-        peripherals.SHA,
-        ShaMode::SHA512,
-        &mut system.peripheral_clock_control,
-    );
 
     println!("Starting up");
     let (wifi, _) = peripherals.RADIO.split();
@@ -122,8 +115,8 @@ fn main() -> ! {
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "192.168.0.5",
-        origin: "http://192.168.5.0:7000",
+        host: "192.168.0.4:7000",
+        origin: "",
         sub_protocols: None,
         additional_headers: None,
     };
@@ -141,30 +134,43 @@ fn main() -> ! {
 
     // set up connection
     let mut stream =
-        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 5), 7000).unwrap();
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 4), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
 
-    println!("connected");
+    let state = framer.state();
+    println!("state: {:?}", state);
 
     // create a note
-    let mut note = nostr::Note::new(PRIVKEY, "esptest", hasher);
+    let msg = br#"["EVENT",{"content":"hello","created_at":1687035119,"id":"7648eb0b7aa54e7fc6673fd8c02f818ad135bd9d0fd346a2cd27c3adc885117c","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"898374a5a18087e304efc07c454d8ef50afa9bfb1514ad5507d59ab76e5c1ed8e7a0ecef888057e05724ccb8d718ca81b409dd6ce6cdbeda9c54e8eb07aab4e3","tags":[]}]"#;
+    let msg1 = br#"["EVENT",{"content":"esptest","created_at":1686880020,"id":"1a892186182fc21b33dab71c62b9aeab2df926b905db7e10e671b65d78e6a019","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"eca27038afc8b1946acfcb3ace9ef4885b15b008507c0e84ea782b3dc222b8f9f1ebfd10c67a57d750315afaef8a77e93cc00836e29d6f662482fb43a93c14b4","tags":[]}]"#;
+    let note = nostr::Note::new(PRIVKEY, "esptest");
     let msg = note.to_relay();
-    let to_print = unsafe { core::str::from_utf8_unchecked(&msg[..1535]) };
-    println!("Note: {}", to_print);
+    let msg = msg[0..360].as_ref();
+    for i in 0..359 {
+        if msg[i] != msg1[i] {
+            println!("{} {} {}", i, msg[i], msg1[i]);
+        }
+    }
     framer
         .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
         .expect("framer write fail");
 
-    while let ReadResult::Text(s) = framer.read(&mut stream, &mut frame_buf).unwrap() {
-        println!("Received: {}", s);
-
-        // close the websocket after receiving the first reply
-        framer
-            .close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None)
-            .unwrap();
-        println!("Sent close handshake");
+    while framer.state() == WebSocketState::Open {
+        match framer.read(&mut stream, &mut frame_buf) {
+            Ok(s) => {
+                // framer
+                //     .close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None)
+                //     .map_err(|e| {
+                //         println!("{:?}", e);
+                //     });
+                // println!("Sent close handshake");
+            }
+            Err(e) => {
+                println!("{:?}", e);
+            }
+        }
     }
 
     println!("Connection closed");
