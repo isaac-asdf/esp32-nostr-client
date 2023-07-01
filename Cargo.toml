@@ -33,13 +33,11 @@ enumset = { version = "1", default-features = false }
 linked_list_allocator = { version = "0.10.3", default-features = false, features = ["const_mut_refs"] }
 embedded-io = "0.4.0"
 fugit = "0.3.6"
-heapless = { version = "0.7.14", default-features = false }
 num-derive = { version = "0.3", features = ["full-syntax"] }
 num-traits = { version = "0.2", default-features = false }
 esp-println = { version = "0.4.0", features = ["log", "esp32"] }
 esp-backtrace = { version = "0.6.0", features = ["esp32", "panic-handler", "exception-handler", "print-uart"] }
 hex-literal = "0.4.1"
 base16ct = "0.2.0"
-secp256k1 = {version = "0.27.0", default-features = false, features = ["serde", "rand", "recovery", "lowmemory"] }
 embedded-websocket = { path = "../embedded-websocket", default-features = false }
-sha2 = { version = "0.10.7", default-features = false }
+nostr-nostd = {path = "../nostr-nostd"}

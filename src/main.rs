@@ -22,8 +22,9 @@ use smoltcp::iface::SocketStorage;
 use esp_backtrace as _;
 use smoltcp::wire::Ipv4Address;
 
+use nostr_nostd as nostr;
+
 mod network;
-mod nostr;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
