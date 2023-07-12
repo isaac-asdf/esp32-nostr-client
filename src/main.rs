@@ -135,7 +135,7 @@ fn main() -> ! {
 
     // set up connection
     let mut stream =
-        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 4), 7000).unwrap();
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 1, 64), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
@@ -144,18 +144,16 @@ fn main() -> ! {
     println!("state: {:?}", state);
 
     // create a note
-    let msg = br#"["EVENT",{"content":"hello","created_at":1687035119,"id":"7648eb0b7aa54e7fc6673fd8c02f818ad135bd9d0fd346a2cd27c3adc885117c","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"898374a5a18087e304efc07c454d8ef50afa9bfb1514ad5507d59ab76e5c1ed8e7a0ecef888057e05724ccb8d718ca81b409dd6ce6cdbeda9c54e8eb07aab4e3","tags":[]}]"#;
-    let msg1 = br#"["EVENT",{"content":"esptest","created_at":1686880020,"id":"1a892186182fc21b33dab71c62b9aeab2df926b905db7e10e671b65d78e6a019","kind":1,"pubkey":"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf","sig":"eca27038afc8b1946acfcb3ace9ef4885b15b008507c0e84ea782b3dc222b8f9f1ebfd10c67a57d750315afaef8a77e93cc00836e29d6f662482fb43a93c14b4","tags":[]}]"#;
     let note = nostr::Note::new(PRIVKEY, "esptest");
-    let msg = note.to_relay();
-    let msg = msg[0..360].as_ref();
-    for i in 0..359 {
-        if msg[i] != msg1[i] {
-            println!("{} {} {}", i, msg[i], msg1[i]);
-        }
-    }
+    // let msg = msg[0..360].as_ref();
+    let (msg, len) = note.to_relay();
     framer
-        .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
+        .write(
+            &mut stream,
+            WebSocketSendMessageType::Text,
+            true,
+            &msg[0..len],
+        )
         .expect("framer write fail");
 
     while framer.state() == WebSocketState::Open {
