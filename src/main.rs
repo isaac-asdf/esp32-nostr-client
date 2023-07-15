@@ -144,9 +144,8 @@ fn main() -> ! {
     println!("state: {:?}", state);
 
     // create a note
-    let note = nostr::Note::new(PRIVKEY, "esptest");
-    // let msg = msg[0..360].as_ref();
-    let (msg, len) = note.to_relay();
+    let note = nostr::Note::new(PRIVKEY, "new note!", 1686880020, [0; 32]);
+    let (msg, len) = note.serialize_to_relay();
     framer
         .write(
             &mut stream,
