@@ -17,6 +17,7 @@ use esp_wifi::current_millis;
 use esp_wifi::wifi::utils::create_network_interface;
 use esp_wifi::wifi::WifiMode;
 use esp_wifi::wifi_interface::WifiStack;
+use nostr::String;
 use smoltcp::iface::SocketStorage;
 
 use esp_backtrace as _;
@@ -116,7 +117,7 @@ fn main() -> ! {
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "192.168.0.4:7000",
+        host: "192.168.1.64:7000",
         origin: "",
         sub_protocols: None,
         additional_headers: None,
@@ -144,15 +145,14 @@ fn main() -> ! {
     println!("state: {:?}", state);
 
     // create a note
-    let note = nostr::Note::new(PRIVKEY, "new note!", 1686880020, [0; 32]);
-    let (msg, len) = note.serialize_to_relay();
+    let content: String<100> = String::from("test vec for send");
+    let note = nostr::Note::new()
+        .content(content)
+        .created_at(1690052733)
+        .build(PRIVKEY, [0; 32]);
+    let msg = note.serialize_to_relay();
     framer
-        .write(
-            &mut stream,
-            WebSocketSendMessageType::Text,
-            true,
-            &msg[0..len],
-        )
+        .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
         .expect("framer write fail");
 
     while framer.state() == WebSocketState::Open {
