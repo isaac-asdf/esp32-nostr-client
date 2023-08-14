@@ -111,13 +111,12 @@ fn main() -> ! {
     let mut tx_buffer = [0u8; 1536];
     let mut socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
 
-    // Main working loop
-    println!("Post to Nostr relay");
+    println!("Connect to Nostr relay");
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
     // initiate a websocket opening handshake
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "192.168.1.64:7000",
+        host: "192.168.1.3:7000",
         origin: "",
         sub_protocols: None,
         additional_headers: None,
@@ -136,7 +135,7 @@ fn main() -> ! {
 
     // set up connection
     let mut stream =
-        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 1, 64), 7000).unwrap();
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 1, 3), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
@@ -145,12 +144,20 @@ fn main() -> ! {
     println!("state: {:?}", state);
 
     // create a note
-    let content: String<100> = String::from("test vec for send");
-    let note = nostr::Note::new()
-        .content(content)
-        .created_at(1690052733)
-        .build(PRIVKEY, [0; 32]);
-    let msg = note.serialize_to_relay();
+    let note = nostr::Note::new_builder(PRIVKEY)
+        .unwrap()
+        .content(String::from("testing..."))
+        .set_kind(nostr::NoteKinds::ShortNote)
+        .build(1691756027, [0; 32])
+        .unwrap();
+    let mut query = nostr::query::Query::new();
+    query
+        .authors
+        .push(*b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf")
+        .unwrap();
+
+    // let msg = note.serialize_to_relay(nostr::ClientMsgKinds::Event);
+    let msg = query.serialize_to_relay("test".into()).unwrap();
     framer
         .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
         .expect("framer write fail");
@@ -158,12 +165,8 @@ fn main() -> ! {
     while framer.state() == WebSocketState::Open {
         match framer.read(&mut stream, &mut frame_buf) {
             Ok(s) => {
-                // framer
-                //     .close(&mut stream, WebSocketCloseStatusCode::NormalClosure, None)
-                //     .map_err(|e| {
-                //         println!("{:?}", e);
-                //     });
-                // println!("Sent close handshake");
+                //
+                println!("main thread repeat");
             }
             Err(e) => {
                 println!("{:?}", e);

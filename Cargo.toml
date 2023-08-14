@@ -39,5 +39,6 @@ esp-println = { version = "0.4.0", features = ["log", "esp32"] }
 esp-backtrace = { version = "0.6.0", features = ["esp32", "panic-handler", "exception-handler", "print-uart"] }
 hex-literal = "0.4.1"
 base16ct = "0.2.0"
-embedded-websocket = { path = "../embedded-websocket", default-features = false }
-nostr-nostd = "0.1.0"
+embedded-websocket = { version = "0.9.3", default-features = false }
+# nostr-nostd = {path = "../nostr-nostd" }
+nostr-nostd = "0.2.0"
