@@ -166,7 +166,6 @@ fn main() -> ! {
         match framer.read(&mut stream, &mut frame_buf) {
             Ok(s) => {
                 //
-                println!("main thread repeat");
             }
             Err(e) => {
                 println!("{:?}", e);
