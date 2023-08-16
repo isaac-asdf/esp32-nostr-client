@@ -701,9 +701,9 @@ checksum = "1bcece43b12349917e096cddfa66107277f123e6c96a5aea78711dc601a47152"
 
 [[package]]
 name = "nostr-nostd"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced096a77eab754ce9e0f0c3c987c34fc2a93d3b70cb5830786758114ff2f201"
+checksum = "28562fa41b8792afd80eb696b5dce11cba18734ec5ea075f6d07c904847a1cbf"
 dependencies = [
  "aes",
  "base16ct",
