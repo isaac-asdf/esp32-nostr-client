@@ -4,9 +4,7 @@
 use embedded_svc::ipv4::Interface;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 use embedded_websocket::framer::Framer;
-use embedded_websocket::{
-    EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType, WebSocketState,
-};
+use embedded_websocket::{EmptyRng, WebSocketClient, WebSocketOptions};
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::timer::TimerGroup;
 use esp32_hal::Rng;
@@ -19,56 +17,51 @@ use esp_wifi::wifi::WifiMode;
 use esp_wifi::wifi_interface::WifiStack;
 use esp_wifi::{current_millis, initialize, EspWifiInitFor};
 use log::info;
-use nostr::String;
 use smoltcp::iface::SocketStorage;
 
 use esp_backtrace as _;
 use smoltcp::wire::Ipv4Address;
 
-use nostr_nostd as nostr;
+// use nostr_nostd as nostr;
 
 mod network;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
-const PRIVKEY: &str = env!("PRIVKEY");
+const _PRIVKEY: &str = env!("PRIVKEY");
 const BUFFER_SIZE: usize = 4000;
 
 #[entry]
 fn main() -> ! {
     init_logger(log::LevelFilter::Info);
+
+    // get peripherals
     let peripherals = Peripherals::take();
     let mut system = peripherals.DPORT.split();
-    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
+    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+    let tg0 = peripherals.TIMG0;
+    let tg1 = peripherals.TIMG1;
+    let rng = Rng::new(peripherals.RNG);
+    let (wifi, _) = peripherals.RADIO.split();
 
     // Disable MWDT and RWDT (Watchdog) flash boot protection
-    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
-    let timer_group0 = TimerGroup::new(
-        peripherals.TIMG0,
-        &clocks,
-        &mut system.peripheral_clock_control,
-    );
+    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
+    let timer_group0 = TimerGroup::new(tg0, &clocks, &mut system.peripheral_clock_control);
     let mut wdt0 = timer_group0.wdt;
-    let timer = TimerGroup::new(
-        peripherals.TIMG1,
-        &clocks,
-        &mut system.peripheral_clock_control,
-    )
-    .timer0;
+    let timer = TimerGroup::new(tg1, &clocks, &mut system.peripheral_clock_control).timer0;
     rtc.rwdt.disable();
     wdt0.disable();
 
     let init = initialize(
         EspWifiInitFor::Wifi,
         timer,
-        Rng::new(peripherals.RNG),
+        rng,
         system.radio_clock_control,
         &clocks,
     )
     .unwrap();
 
     info!("Starting up");
-    let (wifi, _) = peripherals.RADIO.split();
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
     let (iface, device, mut controller, sockets) =
         create_network_interface(&init, wifi, WifiMode::Sta, &mut socket_set_entries).unwrap();
@@ -151,37 +144,20 @@ fn main() -> ! {
     let state = framer.state();
     println!("state: {:?}", state);
 
-    println!("Create a note");
-    // create a note
-    let note = nostr::Note::new_builder(PRIVKEY)
-        .unwrap()
-        .content(String::from("testing..."))
-        .set_kind(nostr::NoteKinds::ShortNote)
-        .build(1691756027, [0; 32])
-        .unwrap();
-    let mut query = nostr::query::Query::new();
-    query
-        .authors
-        .push(*b"098ef66bce60dd4cf10b4ae5949d1ec6dd777ddeb4bc49b47f97275a127a63cf")
-        .unwrap();
+    // framer
+    //     .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
+    //     .expect("framer write fail");
 
-    // let msg = note.serialize_to_relay(nostr::ClientMsgKinds::Event);
-    // let msg = query.serialize_to_relay("test".into()).unwrap();
-    let msg = note.serialize_to_relay(nostr::ClientMsgKinds::Event);
-    framer
-        .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
-        .expect("framer write fail");
-
-    while framer.state() == WebSocketState::Open {
-        match framer.read(&mut stream, &mut frame_buf) {
-            Ok(_) => {
-                //
-            }
-            Err(e) => {
-                println!("{:?}", e);
-            }
-        }
-    }
+    // while framer.state() == WebSocketState::Open {
+    //     match framer.read(&mut stream, &mut frame_buf) {
+    //         Ok(_) => {
+    //             //
+    //         }
+    //         Err(e) => {
+    //             println!("{:?}", e);
+    //         }
+    //     }
+    // }
 
     println!("Connection closed");
     loop {}
