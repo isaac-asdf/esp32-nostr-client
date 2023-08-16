@@ -1,4 +1,4 @@
-use embedded_io::blocking::{Read, Write};
+use embedded_svc::io::{Read, Write};
 use embedded_websocket::framer::Stream;
 use esp_println::println;
 use esp_wifi::wifi_interface::{IoError, Socket};
