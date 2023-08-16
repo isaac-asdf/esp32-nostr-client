@@ -1,3 +1,4 @@
 {
-    "rust-analyzer.checkOnSave.allTargets": false,
+    "rust-analyzer.cargo.extraEnv": {"SSID": "network", "PRIVKEY":"privkey"},
+    "rust-analyzer.check.allTargets": false,
 }

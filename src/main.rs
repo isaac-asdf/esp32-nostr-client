@@ -33,9 +33,6 @@ const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
 const PRIVKEY: &str = env!("PRIVKEY");
 const BUFFER_SIZE: usize = 4000;
-// const SSID: &str = "";
-// const PASSWORD: &str = "";
-// const PRIVKEY: &str = "";
 
 #[entry]
 fn main() -> ! {
@@ -120,7 +117,7 @@ fn main() -> ! {
 
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
-    let mut socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
+    let socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
 
     // initiate a websocket opening handshake
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
