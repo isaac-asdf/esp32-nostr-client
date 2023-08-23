@@ -4,7 +4,9 @@
 use embedded_svc::ipv4::Interface;
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 use embedded_websocket::framer::Framer;
-use embedded_websocket::{EmptyRng, WebSocketClient, WebSocketOptions};
+use embedded_websocket::{
+    EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType, WebSocketState,
+};
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::timer::TimerGroup;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
@@ -18,19 +20,23 @@ use esp_wifi::wifi_interface::WifiStack;
 use esp_wifi::{current_millis, initialize, EspWifiInitFor};
 use log::info;
 
+use nostr::relay_responses::ResponseTypes;
 use smoltcp::iface::SocketStorage;
 use smoltcp::wire::Ipv4Address;
 
 use esp_backtrace as _;
 
-// use nostr_nostd as nostr;
+use nostr_nostd as nostr;
 mod network;
 mod time;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
-const _PRIVKEY: &str = env!("PRIVKEY");
+const PRIVKEY: &str = env!("PRIVKEY");
 const BUFFER_SIZE: usize = 4000;
+
+static mut RTC_OFFSET: u64 = 0;
+static mut UTC_TIME: u32 = 0;
 
 #[entry]
 fn main() -> ! {
@@ -132,7 +138,8 @@ fn main() -> ! {
     let mut rcvd_data = [0_u8; 1536];
 
     udp_socket
-        .send(Ipv4Address::new(18, 119, 130, 247).into(), 123, &req_data)
+        // using ip from https://tf.nist.gov/tf-cgi/servers.cgi (time-a-g.nist.gov)
+        .send(Ipv4Address::new(129, 6, 15, 28).into(), 123, &req_data)
         .unwrap();
     let mut count = 0;
 
@@ -141,6 +148,10 @@ fn main() -> ! {
         count += 1;
         let rcvd = udp_socket.receive(&mut rcvd_data);
         if rcvd.is_ok() {
+            unsafe {
+                // set global static offset variable
+                RTC_OFFSET = rtc.get_time_ms();
+            }
             break;
         }
 
@@ -149,9 +160,11 @@ fn main() -> ! {
 
         if count > 10 {
             udp_socket
-                .send(Ipv4Address::new(18, 119, 130, 247).into(), 123, &req_data)
+                // retry with another server
+                // using ip from https://tf.nist.gov/tf-cgi/servers.cgi (time-b-g.nist.gov)
+                .send(Ipv4Address::new(129, 6, 15, 29).into(), 123, &req_data)
                 .unwrap();
-            println!("reset count again...");
+            info!("reset ntp count...");
             count = 0;
         }
     }
@@ -159,8 +172,9 @@ fn main() -> ! {
     if response.headers.tx_time_seconds == 0 {
         panic!("No timestamp received");
     }
-
-    println!("Current unix: {:?}", response.headers.get_unix_timestamp());
+    unsafe {
+        UTC_TIME = response.headers.get_unix_timestamp();
+    }
 
     // initiate a websocket opening handshake
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
@@ -191,24 +205,56 @@ fn main() -> ! {
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
 
-    let state = framer.state();
-    println!("state: {:?}", state);
+    loop {
+        println!("starting a new message");
+        let now_as_unix = unsafe { get_utc_timestamp(&rtc) };
+        let msg = nostr::Note::new_builder(PRIVKEY)
+            .unwrap()
+            .content("hello world".into())
+            .build(now_as_unix, [0; 32])
+            .unwrap()
+            .serialize_to_relay(nostr::ClientMsgKinds::Event);
 
-    // framer
-    //     .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
-    //     .expect("framer write fail");
+        framer
+            .write(&mut stream, WebSocketSendMessageType::Text, true, &msg)
+            .expect("framer write fail");
 
-    // while framer.state() == WebSocketState::Open {
-    //     match framer.read(&mut stream, &mut frame_buf) {
-    //         Ok(_) => {
-    //             //
-    //         }
-    //         Err(e) => {
-    //             println!("{:?}", e);
-    //         }
-    //     }
-    // }
+        while framer.state() == WebSocketState::Open {
+            match framer.read(&mut stream, &mut frame_buf) {
+                Ok(response) => {
+                    match response {
+                        embedded_websocket::framer::ReadResult::Text(res) => {
+                            match nostr::relay_responses::ResponseTypes::try_from(res).unwrap() {
+                                ResponseTypes::Ok => {
+                                    /* message parsed, could be accepted or not accepted */
+                                }
+                                ResponseTypes::Notice => { /* message formatted improperly or unreadable by relay */
+                                }
+                                // none of the below should be seen at this point
+                                ResponseTypes::Auth => {}
+                                ResponseTypes::Eose => {}
+                                ResponseTypes::Count => {}
+                                ResponseTypes::Event => {}
+                            };
+                        }
+                        embedded_websocket::framer::ReadResult::Closed => (),
+                        _ => {
+                            // binary or pong, which we don't expect
+                        }
+                    };
+                    break;
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                }
+            }
+        }
+        delay.delay_ms(10_000_u32);
+    }
+}
 
-    println!("Connection closed");
-    loop {}
+unsafe fn get_utc_timestamp(rtc: &Rtc) -> u32 {
+    let time_now = rtc.get_time_ms() / 1000;
+    let rtc_offset_s = RTC_OFFSET / 1000;
+    UTC_TIME + u32::try_from(time_now - rtc_offset_s).unwrap()
 }
