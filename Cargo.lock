@@ -631,6 +631,7 @@ dependencies = [
  "hex-literal",
  "log",
  "nostr-nostd",
+ "ntp-nostd",
  "smoltcp",
 ]
 
@@ -724,6 +725,10 @@ dependencies = [
  "secp256k1",
  "sha2",
 ]
+
+[[package]]
+name = "ntp-nostd"
+version = "0.1.0"
 
 [[package]]
 name = "num-derive"

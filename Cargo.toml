@@ -30,6 +30,7 @@ smoltcp = { version = "0.10.0", default-features = false, features = [
     "proto-ipv4",
     "proto-dns",
     "socket-tcp",
+    "packetmeta-id",
     "socket-icmp",
     "socket-udp",
     "socket-dns",
@@ -48,6 +49,9 @@ embedded-websocket = { version = "0.9.3", default-features = false }
 hex-literal = "0.4.1"
 base16ct = "0.2.0"
 nostr-nostd = "0.2.1"
+
+# time fetch
+ntp-nostd = { path = "../ntp-nostd" }
 
 [dependencies.esp-wifi]
 git = "https://github.com/esp-rs/esp-wifi.git"

@@ -7,8 +7,8 @@ use embedded_websocket::framer::Framer;
 use embedded_websocket::{EmptyRng, WebSocketClient, WebSocketOptions};
 use esp32_hal::clock::{ClockControl, CpuClock};
 use esp32_hal::timer::TimerGroup;
-use esp32_hal::Rng;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
+use esp32_hal::{Delay, Rng};
 
 use esp_println::logger::init_logger;
 use esp_println::println;
@@ -17,14 +17,15 @@ use esp_wifi::wifi::WifiMode;
 use esp_wifi::wifi_interface::WifiStack;
 use esp_wifi::{current_millis, initialize, EspWifiInitFor};
 use log::info;
-use smoltcp::iface::SocketStorage;
 
-use esp_backtrace as _;
+use smoltcp::iface::SocketStorage;
 use smoltcp::wire::Ipv4Address;
 
-// use nostr_nostd as nostr;
+use esp_backtrace as _;
 
+// use nostr_nostd as nostr;
 mod network;
+mod time;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
@@ -108,9 +109,58 @@ fn main() -> ! {
         }
     }
 
+    // get tcp socket for nostr comms
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
     let socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
+
+    // get udp socket for ntp time stamps
+    println!("Get NTP time");
+    let mut rx_meta1 = [smoltcp::socket::udp::PacketMetadata::EMPTY; 10];
+    let mut rx_buffer1 = [0u8; 1536];
+    let mut tx_meta1 = [smoltcp::socket::udp::PacketMetadata::EMPTY; 10];
+    let mut tx_buffer1 = [0u8; 1536];
+    let mut udp_socket = wifi_stack.get_udp_socket(
+        &mut rx_meta1,
+        &mut rx_buffer1,
+        &mut tx_meta1,
+        &mut tx_buffer1,
+    );
+    udp_socket.bind(50123).unwrap();
+
+    let req_data = ntp_nostd::get_client_request();
+    let mut rcvd_data = [0_u8; 1536];
+
+    udp_socket
+        .send(Ipv4Address::new(18, 119, 130, 247).into(), 123, &req_data)
+        .unwrap();
+    let mut count = 0;
+
+    let mut delay = Delay::new(&clocks);
+    loop {
+        count += 1;
+        let rcvd = udp_socket.receive(&mut rcvd_data);
+        if rcvd.is_ok() {
+            break;
+        }
+
+        // delay to wait for data to show up to port
+        delay.delay_ms(500_u32);
+
+        if count > 10 {
+            udp_socket
+                .send(Ipv4Address::new(18, 119, 130, 247).into(), 123, &req_data)
+                .unwrap();
+            println!("reset count again...");
+            count = 0;
+        }
+    }
+    let response = ntp_nostd::NtpServerResponse::from(rcvd_data.as_ref());
+    if response.headers.tx_time_seconds == 0 {
+        panic!("No timestamp received");
+    }
+
+    println!("Current unix: {:?}", response.headers.get_unix_timestamp());
 
     // initiate a websocket opening handshake
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
