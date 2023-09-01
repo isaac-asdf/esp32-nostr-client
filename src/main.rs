@@ -8,9 +8,10 @@ use embedded_websocket::{
     EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType, WebSocketState,
 };
 use esp32_hal::clock::{ClockControl, CpuClock};
+use esp32_hal::i2c::I2C;
 use esp32_hal::timer::TimerGroup;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
-use esp32_hal::{Delay, Rng};
+use esp32_hal::{Delay, Rng, IO};
 
 use esp_println::logger::init_logger;
 use esp_println::println;
@@ -50,6 +51,7 @@ fn main() -> ! {
     let tg1 = peripherals.TIMG1;
     let rng = Rng::new(peripherals.RNG);
     let (wifi, _) = peripherals.RADIO.split();
+    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
     // Disable MWDT and RWDT (Watchdog) flash boot protection
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
@@ -68,7 +70,36 @@ fn main() -> ! {
     )
     .unwrap();
 
+    // // Set GPIO2 as an output, and set its state high initially.
+    // let mut led = io.pins.gpio32.into_push_pull_output();
+    // led.set_high().unwrap();
+    // let mut led = io.pins.gpio33.into_push_pull_output();
+    // led.set_high().unwrap();
+
+    // Create a new peripheral object with the described wiring
+    // and standard I2C clock speed
+    // The following wiring is assumed:
+    // - SDA => GPIO32
+    // - SCL => GPIO33
+    let mut i2c = I2C::new(
+        peripherals.I2C0,
+        io.pins.gpio32,
+        io.pins.gpio33,
+        100u32.kHz(),
+        &mut system.peripheral_clock_control,
+        &clocks,
+    );
     info!("Starting up");
+    let mut delay = Delay::new(&clocks);
+    loop {
+        delay.delay_ms(1000u32);
+        let mut data = [0u8; 22];
+        // i2c.read(0xaa, &mut data).ok();
+        i2c.write_read(0x77, &[0xaa], &mut data).ok();
+
+        println!("Cal data: {:02x?}", data);
+    }
+
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
     let (iface, device, mut controller, sockets) =
         create_network_interface(&init, wifi, WifiMode::Sta, &mut socket_set_entries).unwrap();
@@ -143,7 +174,6 @@ fn main() -> ! {
         .unwrap();
     let mut count = 0;
 
-    let mut delay = Delay::new(&clocks);
     loop {
         count += 1;
         let rcvd = udp_socket.receive(&mut rcvd_data);
@@ -180,7 +210,7 @@ fn main() -> ! {
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "192.168.1.3:7000",
+        host: "192.168.0.24:7000",
         origin: "",
         sub_protocols: None,
         additional_headers: None,
@@ -200,7 +230,7 @@ fn main() -> ! {
     println!("Connect to Nostr relay");
     // set up connection
     let mut stream =
-        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 1, 3), 7000).unwrap();
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 24), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
@@ -211,6 +241,7 @@ fn main() -> ! {
         let msg = nostr::Note::new_builder(PRIVKEY)
             .unwrap()
             .content("hello world".into())
+            .add_tag("g,geohash".into())
             .build(now_as_unix, [0; 32])
             .unwrap()
             .serialize_to_relay(nostr::ClientMsgKinds::Event);
@@ -227,8 +258,13 @@ fn main() -> ! {
                             match nostr::relay_responses::ResponseTypes::try_from(res).unwrap() {
                                 ResponseTypes::Ok => {
                                     /* message parsed, could be accepted or not accepted */
+                                    // display message for debugging purposes
+                                    println!("{res}");
                                 }
-                                ResponseTypes::Notice => { /* message formatted improperly or unreadable by relay */
+                                ResponseTypes::Notice => {
+                                    /* message formatted improperly or unreadable by relay */
+                                    // display message for debugging purposes
+                                    println!("{res}");
                                 }
                                 // none of the below should be seen at this point
                                 ResponseTypes::Auth => {}
