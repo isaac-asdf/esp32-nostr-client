@@ -22,12 +22,14 @@ use esp_wifi::{current_millis, initialize, EspWifiInitFor};
 use log::info;
 
 use nostr::relay_responses::ResponseTypes;
+use nostr::String;
 use smoltcp::iface::SocketStorage;
 use smoltcp::wire::Ipv4Address;
 
 use esp_backtrace as _;
 
 use nostr_nostd as nostr;
+mod bmp180;
 mod network;
 mod time;
 
@@ -70,18 +72,12 @@ fn main() -> ! {
     )
     .unwrap();
 
-    // // Set GPIO2 as an output, and set its state high initially.
-    // let mut led = io.pins.gpio32.into_push_pull_output();
-    // led.set_high().unwrap();
-    // let mut led = io.pins.gpio33.into_push_pull_output();
-    // led.set_high().unwrap();
-
     // Create a new peripheral object with the described wiring
     // and standard I2C clock speed
     // The following wiring is assumed:
     // - SDA => GPIO32
     // - SCL => GPIO33
-    let mut i2c = I2C::new(
+    let i2c = I2C::new(
         peripherals.I2C0,
         io.pins.gpio32,
         io.pins.gpio33,
@@ -91,14 +87,9 @@ fn main() -> ! {
     );
     info!("Starting up");
     let mut delay = Delay::new(&clocks);
-    loop {
-        delay.delay_ms(1000u32);
-        let mut data = [0u8; 22];
-        // i2c.read(0xaa, &mut data).ok();
-        i2c.write_read(0x77, &[0xaa], &mut data).ok();
+    delay.delay_ms(1000u32);
 
-        println!("Cal data: {:02x?}", data);
-    }
+    let mut bmp = bmp180::Bmp180::new(i2c);
 
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
     let (iface, device, mut controller, sockets) =
@@ -237,11 +228,22 @@ fn main() -> ! {
 
     loop {
         println!("starting a new message");
+        bmp.start_temp_read();
+        delay.delay_ms(1000u32);
+        let temp = bmp.get_temperature();
+        println!("temp: {temp}");
         let now_as_unix = unsafe { get_utc_timestamp(&rtc) };
+        bmp.start_temp_read();
+        delay.delay_ms(5u32);
+        let temp = bmp.get_temperature();
+        let mut msg: String<400> = String::new();
+        msg.push_str(&f32_to_decimal_string(temp)).unwrap();
         let msg = nostr::Note::new_builder(PRIVKEY)
             .unwrap()
-            .content("hello world".into())
+            .content(msg)
             .add_tag("g,geohash".into())
+            .add_tag("k,temperature".into())
+            .add_tag("units,celsius".into())
             .build(now_as_unix, [0; 32])
             .unwrap()
             .serialize_to_relay(nostr::ClientMsgKinds::Event);
@@ -293,4 +295,57 @@ unsafe fn get_utc_timestamp(rtc: &Rtc) -> u32 {
     let time_now = rtc.get_time_ms() / 1000;
     let rtc_offset_s = RTC_OFFSET / 1000;
     UTC_TIME + u32::try_from(time_now - rtc_offset_s).unwrap()
+}
+
+fn f32_to_decimal_string(f: f32) -> String<5> {
+    let mut buffer = [0u8; 5]; // Choose an appropriate buffer size
+    let mut index = 0;
+    let mut integer_part = f as i32;
+    let mut fractional_part = if f > 0. {
+        (f - integer_part as f32) * 10.
+    } else {
+        (f + integer_part as f32) * 10.
+    } as i32;
+
+    // Handle negative numbers
+    if f < 0.0 {
+        buffer[index] = b'-';
+        index += 1;
+        integer_part = integer_part.abs();
+        fractional_part = fractional_part.abs();
+    }
+
+    // Convert the integer part to a string
+    let mut temp = [0u8; 16];
+    let mut temp_index = 0;
+    while integer_part > 0 {
+        temp[temp_index] = b'0' + (integer_part % 10) as u8;
+        integer_part /= 10;
+        temp_index += 1;
+    }
+    while temp_index > 0 {
+        index += 1;
+        temp_index -= 1;
+        buffer[index] = temp[temp_index];
+    }
+
+    // Add the decimal point
+    buffer[index] = b'.';
+    index += 1;
+
+    // Convert the fractional part to a string (6 decimal places)
+    for _ in 0..6 {
+        buffer[index] = b'0' + (fractional_part % 10) as u8;
+        fractional_part /= 10;
+        index += 1;
+    }
+
+    // Null-terminate the string
+    buffer[index] = b'\0';
+
+    let mut str = String::new();
+    buffer.iter().for_each(|b| {
+        str.push(*b as char).unwrap();
+    });
+    str
 }
