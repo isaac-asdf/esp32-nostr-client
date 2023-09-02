@@ -22,5 +22,6 @@ export AR=xtensa-esp32-elf-ar
 export SSID="wifi_name"
 export PWD="wifi_password"
 export PRIVKEY="a5084b35a58e3e1a26f5efb46cb9dbada73191526aa6d11bccb590cbeb2d8fa3"
+export GEOHASH="geohash for install location"
 cargo run --release
 ```

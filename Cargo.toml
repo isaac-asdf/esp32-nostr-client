@@ -51,7 +51,7 @@ base16ct = "0.2.0"
 nostr-nostd = "0.2.1"
 
 # time fetch
-ntp-nostd = { path = "../ntp-nostd" }
+ntp-nostd = "0.0.1"
 
 [dependencies.esp-wifi]
 git = "https://github.com/esp-rs/esp-wifi.git"

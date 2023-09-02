@@ -728,7 +728,9 @@ dependencies = [
 
 [[package]]
 name = "ntp-nostd"
-version = "0.1.0"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65c7af048bc6b8e5e6de32918f268b05284c1f25025308986581feb4c3c5dec0"
 
 [[package]]
 name = "num-derive"

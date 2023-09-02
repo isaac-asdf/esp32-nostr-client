@@ -36,10 +36,8 @@ mod time;
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
 const PRIVKEY: &str = env!("PRIVKEY");
+const GEOHASH: &str = env!("GEOHASH");
 const BUFFER_SIZE: usize = 4000;
-
-static mut RTC_OFFSET: u64 = 0;
-static mut UTC_TIME: u32 = 0;
 
 #[entry]
 fn main() -> ! {
@@ -166,14 +164,15 @@ fn main() -> ! {
         .unwrap();
     let mut count = 0;
 
+    // get time from ntp server. requires delaying because UDP packets can arrive whenever
+    let rtc_offset: u64; // = 0;
+    let unix_time: u32; // = 0;
     loop {
         count += 1;
         let rcvd = udp_socket.receive(&mut rcvd_data);
         if rcvd.is_ok() {
-            unsafe {
-                // set global static offset variable
-                RTC_OFFSET = rtc.get_time_ms();
-            }
+            // set global static offset variable
+            rtc_offset = rtc.get_time_ms();
             break;
         }
 
@@ -194,9 +193,7 @@ fn main() -> ! {
     if response.headers.tx_time_seconds == 0 {
         panic!("No timestamp received");
     }
-    unsafe {
-        UTC_TIME = response.headers.get_unix_timestamp();
-    }
+    unix_time = response.headers.get_unix_timestamp();
 
     // initiate a websocket opening handshake
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
@@ -227,20 +224,23 @@ fn main() -> ! {
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
 
+    let mut geohash = String::new();
+    geohash.push_str("g,").unwrap();
+    geohash.push_str(GEOHASH).unwrap();
     loop {
         println!("starting a new message");
         bmp.start_temp_read();
         delay.delay_ms(1000u32);
         let temp = bmp.get_temperature();
         println!("temp in F: {}", (temp * 9. / 5.) + 32.);
-        let now_as_unix = unsafe { get_utc_timestamp(&rtc) };
+        let now_as_unix = get_utc_timestamp(&rtc, unix_time, rtc_offset);
         let mut msg: String<400> = String::new();
         core::fmt::write(&mut msg, format_args!("{temp}")).unwrap();
         println!("msg:{msg}");
         let msg = nostr::Note::new_builder(PRIVKEY)
             .unwrap()
             .content(msg)
-            .add_tag("g,geohash".into())
+            .add_tag(geohash.clone())
             .add_tag("k,temperature".into())
             .add_tag("units,celsius".into())
             .build(now_as_unix, [0; 32])
@@ -290,8 +290,8 @@ fn main() -> ! {
     }
 }
 
-unsafe fn get_utc_timestamp(rtc: &Rtc) -> u32 {
+fn get_utc_timestamp(rtc: &Rtc, unix_time: u32, rtc_offset: u64) -> u32 {
     let time_now = rtc.get_time_ms() / 1000;
-    let rtc_offset_s = RTC_OFFSET / 1000;
-    UTC_TIME + u32::try_from(time_now - rtc_offset_s).unwrap()
+    let rtc_offset_s = rtc_offset / 1000;
+    unix_time + u32::try_from(time_now - rtc_offset_s).unwrap()
 }

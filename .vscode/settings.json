@@ -1,4 +1,4 @@
 {
-    "rust-analyzer.cargo.extraEnv": {"SSID": "network", "PRIVKEY":"privkey"},
+    "rust-analyzer.cargo.extraEnv": {"SSID": "network", "PRIVKEY":"privkey", "GEOHASH":"geohash"},
     "rust-analyzer.check.allTargets": false,
 }
