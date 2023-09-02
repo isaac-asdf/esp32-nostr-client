@@ -22,7 +22,7 @@ use esp_wifi::{current_millis, initialize, EspWifiInitFor};
 use log::info;
 
 use nostr::relay_responses::ResponseTypes;
-use nostr::String;
+use nostr::{NoteKinds, String};
 use smoltcp::iface::SocketStorage;
 use smoltcp::wire::Ipv4Address;
 
@@ -31,7 +31,6 @@ use esp_backtrace as _;
 use nostr_nostd as nostr;
 mod bmp180;
 mod network;
-mod time;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
@@ -240,6 +239,7 @@ fn main() -> ! {
         let msg = nostr::Note::new_builder(PRIVKEY)
             .unwrap()
             .content(msg)
+            .set_kind(NoteKinds::IOT)
             .add_tag(geohash.clone())
             .add_tag("k,temperature".into())
             .add_tag("units,celsius".into())

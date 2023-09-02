@@ -1,7 +1,7 @@
 use embedded_svc::io::{Read, Write};
 use embedded_websocket::framer::Stream;
 use esp_println::println;
-use esp_wifi::wifi_interface::{IoError, Socket, UdpSocket};
+use esp_wifi::wifi_interface::{IoError, Socket};
 use smoltcp::wire::Ipv4Address;
 
 pub struct NetworkConnection<'a> {
