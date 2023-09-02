@@ -8,9 +8,10 @@ use embedded_websocket::{
     EmptyRng, WebSocketClient, WebSocketOptions, WebSocketSendMessageType, WebSocketState,
 };
 use esp32_hal::clock::{ClockControl, CpuClock};
+use esp32_hal::i2c::I2C;
 use esp32_hal::timer::TimerGroup;
 use esp32_hal::{peripherals::Peripherals, prelude::*, Rtc};
-use esp32_hal::{Delay, Rng};
+use esp32_hal::{Delay, Rng, IO};
 
 use esp_println::logger::init_logger;
 use esp_println::println;
@@ -21,22 +22,22 @@ use esp_wifi::{current_millis, initialize, EspWifiInitFor};
 use log::info;
 
 use nostr::relay_responses::ResponseTypes;
+use nostr::String;
 use smoltcp::iface::SocketStorage;
 use smoltcp::wire::Ipv4Address;
 
 use esp_backtrace as _;
 
 use nostr_nostd as nostr;
+mod bmp180;
 mod network;
 mod time;
 
 const SSID: &str = env!("SSID");
 const PASSWORD: &str = env!("PWD");
 const PRIVKEY: &str = env!("PRIVKEY");
+const GEOHASH: &str = env!("GEOHASH");
 const BUFFER_SIZE: usize = 4000;
-
-static mut RTC_OFFSET: u64 = 0;
-static mut UTC_TIME: u32 = 0;
 
 #[entry]
 fn main() -> ! {
@@ -50,6 +51,7 @@ fn main() -> ! {
     let tg1 = peripherals.TIMG1;
     let rng = Rng::new(peripherals.RNG);
     let (wifi, _) = peripherals.RADIO.split();
+    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
     // Disable MWDT and RWDT (Watchdog) flash boot protection
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
@@ -68,7 +70,26 @@ fn main() -> ! {
     )
     .unwrap();
 
+    // start setting up things actually needed
     info!("Starting up");
+    let mut delay = Delay::new(&clocks);
+
+    // Create a new peripheral object with the described wiring
+    // and standard I2C clock speed
+    // The following wiring is assumed:
+    // - SDA => GPIO32
+    // - SCL => GPIO33
+    let i2c = I2C::new(
+        peripherals.I2C0,
+        io.pins.gpio32,
+        io.pins.gpio33,
+        100u32.kHz(),
+        &mut system.peripheral_clock_control,
+        &clocks,
+    );
+    delay.delay_ms(1000u32);
+    let mut bmp = bmp180::Bmp180::new(i2c);
+
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
     let (iface, device, mut controller, sockets) =
         create_network_interface(&init, wifi, WifiMode::Sta, &mut socket_set_entries).unwrap();
@@ -121,7 +142,7 @@ fn main() -> ! {
     let socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
 
     // get udp socket for ntp time stamps
-    println!("Get NTP time");
+    info!("Get NTP time");
     let mut rx_meta1 = [smoltcp::socket::udp::PacketMetadata::EMPTY; 10];
     let mut rx_buffer1 = [0u8; 1536];
     let mut tx_meta1 = [smoltcp::socket::udp::PacketMetadata::EMPTY; 10];
@@ -143,15 +164,15 @@ fn main() -> ! {
         .unwrap();
     let mut count = 0;
 
-    let mut delay = Delay::new(&clocks);
+    // get time from ntp server. requires delaying because UDP packets can arrive whenever
+    let rtc_offset: u64; // = 0;
+    let unix_time: u32; // = 0;
     loop {
         count += 1;
         let rcvd = udp_socket.receive(&mut rcvd_data);
         if rcvd.is_ok() {
-            unsafe {
-                // set global static offset variable
-                RTC_OFFSET = rtc.get_time_ms();
-            }
+            // set global static offset variable
+            rtc_offset = rtc.get_time_ms();
             break;
         }
 
@@ -172,15 +193,13 @@ fn main() -> ! {
     if response.headers.tx_time_seconds == 0 {
         panic!("No timestamp received");
     }
-    unsafe {
-        UTC_TIME = response.headers.get_unix_timestamp();
-    }
+    unix_time = response.headers.get_unix_timestamp();
 
     // initiate a websocket opening handshake
     let mut websocket = WebSocketClient::new_client(EmptyRng::new());
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "192.168.1.3:7000",
+        host: "192.168.0.24:7000",
         origin: "",
         sub_protocols: None,
         additional_headers: None,
@@ -200,17 +219,30 @@ fn main() -> ! {
     println!("Connect to Nostr relay");
     // set up connection
     let mut stream =
-        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 1, 3), 7000).unwrap();
+        network::NetworkConnection::new(socket, Ipv4Address::new(192, 168, 0, 24), 7000).unwrap();
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
 
+    let mut geohash = String::new();
+    geohash.push_str("g,").unwrap();
+    geohash.push_str(GEOHASH).unwrap();
     loop {
         println!("starting a new message");
-        let now_as_unix = unsafe { get_utc_timestamp(&rtc) };
+        bmp.start_temp_read();
+        delay.delay_ms(1000u32);
+        let temp = bmp.get_temperature();
+        println!("temp in F: {}", (temp * 9. / 5.) + 32.);
+        let now_as_unix = get_utc_timestamp(&rtc, unix_time, rtc_offset);
+        let mut msg: String<400> = String::new();
+        core::fmt::write(&mut msg, format_args!("{temp}")).unwrap();
+        println!("msg:{msg}");
         let msg = nostr::Note::new_builder(PRIVKEY)
             .unwrap()
-            .content("hello world".into())
+            .content(msg)
+            .add_tag(geohash.clone())
+            .add_tag("k,temperature".into())
+            .add_tag("units,celsius".into())
             .build(now_as_unix, [0; 32])
             .unwrap()
             .serialize_to_relay(nostr::ClientMsgKinds::Event);
@@ -227,8 +259,13 @@ fn main() -> ! {
                             match nostr::relay_responses::ResponseTypes::try_from(res).unwrap() {
                                 ResponseTypes::Ok => {
                                     /* message parsed, could be accepted or not accepted */
+                                    // display message for debugging purposes
+                                    println!("{res}");
                                 }
-                                ResponseTypes::Notice => { /* message formatted improperly or unreadable by relay */
+                                ResponseTypes::Notice => {
+                                    /* message formatted improperly or unreadable by relay */
+                                    // display message for debugging purposes
+                                    println!("{res}");
                                 }
                                 // none of the below should be seen at this point
                                 ResponseTypes::Auth => {}
@@ -253,8 +290,8 @@ fn main() -> ! {
     }
 }
 
-unsafe fn get_utc_timestamp(rtc: &Rtc) -> u32 {
+fn get_utc_timestamp(rtc: &Rtc, unix_time: u32, rtc_offset: u64) -> u32 {
     let time_now = rtc.get_time_ms() / 1000;
-    let rtc_offset_s = RTC_OFFSET / 1000;
-    UTC_TIME + u32::try_from(time_now - rtc_offset_s).unwrap()
+    let rtc_offset_s = rtc_offset / 1000;
+    unix_time + u32::try_from(time_now - rtc_offset_s).unwrap()
 }
