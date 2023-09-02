@@ -72,6 +72,10 @@ fn main() -> ! {
     )
     .unwrap();
 
+    // start setting up things actually needed
+    info!("Starting up");
+    let mut delay = Delay::new(&clocks);
+
     // Create a new peripheral object with the described wiring
     // and standard I2C clock speed
     // The following wiring is assumed:
@@ -85,10 +89,7 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
         &clocks,
     );
-    info!("Starting up");
-    let mut delay = Delay::new(&clocks);
     delay.delay_ms(1000u32);
-
     let mut bmp = bmp180::Bmp180::new(i2c);
 
     let mut socket_set_entries: [SocketStorage; 3] = Default::default();
@@ -143,7 +144,7 @@ fn main() -> ! {
     let socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
 
     // get udp socket for ntp time stamps
-    println!("Get NTP time");
+    info!("Get NTP time");
     let mut rx_meta1 = [smoltcp::socket::udp::PacketMetadata::EMPTY; 10];
     let mut rx_buffer1 = [0u8; 1536];
     let mut tx_meta1 = [smoltcp::socket::udp::PacketMetadata::EMPTY; 10];
@@ -231,13 +232,11 @@ fn main() -> ! {
         bmp.start_temp_read();
         delay.delay_ms(1000u32);
         let temp = bmp.get_temperature();
-        println!("temp: {temp}");
+        println!("temp in F: {}", (temp * 9. / 5.) + 32.);
         let now_as_unix = unsafe { get_utc_timestamp(&rtc) };
-        bmp.start_temp_read();
-        delay.delay_ms(5u32);
-        let temp = bmp.get_temperature();
         let mut msg: String<400> = String::new();
-        msg.push_str(&f32_to_decimal_string(temp)).unwrap();
+        core::fmt::write(&mut msg, format_args!("{temp}")).unwrap();
+        println!("msg:{msg}");
         let msg = nostr::Note::new_builder(PRIVKEY)
             .unwrap()
             .content(msg)
@@ -295,57 +294,4 @@ unsafe fn get_utc_timestamp(rtc: &Rtc) -> u32 {
     let time_now = rtc.get_time_ms() / 1000;
     let rtc_offset_s = RTC_OFFSET / 1000;
     UTC_TIME + u32::try_from(time_now - rtc_offset_s).unwrap()
-}
-
-fn f32_to_decimal_string(f: f32) -> String<5> {
-    let mut buffer = [0u8; 5]; // Choose an appropriate buffer size
-    let mut index = 0;
-    let mut integer_part = f as i32;
-    let mut fractional_part = if f > 0. {
-        (f - integer_part as f32) * 10.
-    } else {
-        (f + integer_part as f32) * 10.
-    } as i32;
-
-    // Handle negative numbers
-    if f < 0.0 {
-        buffer[index] = b'-';
-        index += 1;
-        integer_part = integer_part.abs();
-        fractional_part = fractional_part.abs();
-    }
-
-    // Convert the integer part to a string
-    let mut temp = [0u8; 16];
-    let mut temp_index = 0;
-    while integer_part > 0 {
-        temp[temp_index] = b'0' + (integer_part % 10) as u8;
-        integer_part /= 10;
-        temp_index += 1;
-    }
-    while temp_index > 0 {
-        index += 1;
-        temp_index -= 1;
-        buffer[index] = temp[temp_index];
-    }
-
-    // Add the decimal point
-    buffer[index] = b'.';
-    index += 1;
-
-    // Convert the fractional part to a string (6 decimal places)
-    for _ in 0..6 {
-        buffer[index] = b'0' + (fractional_part % 10) as u8;
-        fractional_part /= 10;
-        index += 1;
-    }
-
-    // Null-terminate the string
-    buffer[index] = b'\0';
-
-    let mut str = String::new();
-    buffer.iter().for_each(|b| {
-        str.push(*b as char).unwrap();
-    });
-    str
 }
