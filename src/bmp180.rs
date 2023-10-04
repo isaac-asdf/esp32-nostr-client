@@ -48,9 +48,7 @@ impl<'d> Bmp180<'d> {
         let mut data = [0u8; 22];
         i2c.write_read(BMP_I2C_ADDRESS, &[CAL_DATA_START], &mut data)
             .ok();
-        println!("Cal data hex: {:02x?}", data);
         let cal_data: BmpCalData = data.into();
-        println!("Cal data: {:?}", cal_data);
         Bmp180 {
             i2c: i2c,
             cal_data: cal_data,

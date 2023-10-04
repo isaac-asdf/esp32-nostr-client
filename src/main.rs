@@ -41,6 +41,7 @@ const BUFFER_SIZE: usize = 4000;
 #[entry]
 fn main() -> ! {
     init_logger(log::LevelFilter::Info);
+    info!("Starting program");
 
     // get peripherals
     let peripherals = Peripherals::take();
@@ -136,8 +137,8 @@ fn main() -> ! {
     }
 
     // get tcp socket for nostr comms
-    let mut rx_buffer = [0u8; 1536];
-    let mut tx_buffer = [0u8; 1536];
+    let mut rx_buffer = [0u8; 1500];
+    let mut tx_buffer = [0u8; 1500];
     let socket = wifi_stack.get_socket(&mut rx_buffer, &mut tx_buffer);
 
     // get udp socket for ntp time stamps
@@ -222,6 +223,7 @@ fn main() -> ! {
     framer
         .connect(&mut stream, &websocket_options)
         .expect("connection error");
+    info!("connected");
 
     let mut geohash = String::new();
     geohash.push_str("g,").unwrap();
